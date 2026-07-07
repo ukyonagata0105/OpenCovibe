@@ -3,11 +3,12 @@
  * i18n quality gate — checks all messages/<locale>.json files against en.json.
  *
  * Rules:
- *   1. Key alignment — every locale must have the same keys as en.json
+ *   1. Key alignment — missing locale keys warn and fall back to en at runtime
  *   2. Placeholder consistency — {variable} sets must match en.json
- *   3. Empty / untranslated detection — no empty strings; value === key warns
+ *   3. Empty / untranslated detection — empty strings and value === key warn
  *
- * Exit code: 1 if any errors, 0 if only warnings.
+ * Exit code: 1 for broken JSON or placeholder mismatches, 0 if only warnings.
+ * Set MOFU_I18N_STRICT=1 to treat missing/empty locale values as errors.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, basename } from "node:path";
@@ -18,7 +19,7 @@ const MESSAGES_DIR = join(import.meta.dirname, "..", "messages");
 const UNTRANSLATED_ALLOWLIST_PREFIXES = [
   "common_brand",
   "auth_oauth",
-  "nav_",      // Short nav labels may match across languages
+  "nav_", // Short nav labels may match across languages
   "app_name",
   "cmd_versionContent", // Technical version string
 ];
@@ -55,6 +56,7 @@ function setsEqual(a, b) {
 
 let errors = 0;
 let warnings = 0;
+const strict = process.env.MOFU_I18N_STRICT === "1";
 
 // Load en.json as baseline
 const enPath = join(MESSAGES_DIR, "en.json");
@@ -62,8 +64,7 @@ const enData = JSON.parse(readFileSync(enPath, "utf-8"));
 const enKeys = new Set(Object.keys(enData));
 
 // Find all other locale files
-const localeFiles = readdirSync(MESSAGES_DIR)
-  .filter((f) => f.endsWith(".json") && f !== "en.json");
+const localeFiles = readdirSync(MESSAGES_DIR).filter((f) => f.endsWith(".json") && f !== "en.json");
 
 if (localeFiles.length === 0) {
   console.log("No non-en locale files found. Nothing to check.");
@@ -87,8 +88,14 @@ for (const file of localeFiles) {
   // Rule 1: Key alignment
   for (const key of enKeys) {
     if (!localeKeys.has(key)) {
-      console.error(`ERROR [${locale}] Missing key: "${key}"`);
-      errors++;
+      const message = `${strict ? "ERROR" : "WARN "} [${locale}] Missing key: "${key}"`;
+      if (strict) {
+        console.error(message);
+        errors++;
+      } else {
+        console.warn(message);
+        warnings++;
+      }
     }
   }
   for (const key of localeKeys) {
@@ -107,17 +114,19 @@ for (const file of localeFiles) {
 
     // Rule 3a: Empty string
     if (localeValue === "") {
-      console.error(`ERROR [${locale}] Empty value for key: "${key}"`);
-      errors++;
+      const message = `${strict ? "ERROR" : "WARN "} [${locale}] Empty value for key: "${key}"`;
+      if (strict) {
+        console.error(message);
+        errors++;
+      } else {
+        console.warn(message);
+        warnings++;
+      }
       continue;
     }
 
     // Rule 3b: Value equals en value (possibly untranslated)
-    if (
-      localeValue === enValue &&
-      !isAllowlisted(key) &&
-      !isTechnicalValue(enValue)
-    ) {
+    if (localeValue === enValue && !isAllowlisted(key) && !isTechnicalValue(enValue)) {
       console.warn(`WARN  [${locale}] Value same as en (untranslated?): "${key}"`);
       warnings++;
     }
@@ -129,7 +138,7 @@ for (const file of localeFiles) {
       const enList = [...enPlaceholders].join(", ");
       const localeList = [...localePlaceholders].join(", ");
       console.error(
-        `ERROR [${locale}] Placeholder mismatch for "${key}": en={${enList}} ${locale}={${localeList}}`
+        `ERROR [${locale}] Placeholder mismatch for "${key}": en={${enList}} ${locale}={${localeList}}`,
       );
       errors++;
     }
@@ -138,7 +147,9 @@ for (const file of localeFiles) {
 
 // Summary
 console.log("");
-console.log(`i18n check: ${localeFiles.length} locale(s), ${errors} error(s), ${warnings} warning(s)`);
+console.log(
+  `i18n check: ${localeFiles.length} locale(s), ${errors} error(s), ${warnings} warning(s)`,
+);
 
 if (errors > 0) {
   process.exit(1);

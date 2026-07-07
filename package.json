@@ -1,16 +1,16 @@
 {
-  "name": "opencovibe",
+  "name": "mofu-app",
   "version": "0.2.5",
-  "description": "Local-first desktop app for AI-assisted vibe coding",
+  "description": "Mofumofu desktop app for local AI-assisted coding",
   "type": "module",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/AnyiWang/OpenCovibe",
+  "homepage": "https://github.com/maas-creative/mofumofu",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AnyiWang/OpenCovibe.git"
+    "url": "https://github.com/maas-creative/mofumofu.git"
   },
   "bugs": {
-    "url": "https://github.com/AnyiWang/OpenCovibe/issues"
+    "url": "https://github.com/maas-creative/mofumofu/issues"
   },
   "engines": {
     "node": ">=20"

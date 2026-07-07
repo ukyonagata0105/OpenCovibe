@@ -153,7 +153,7 @@ describe("i18n", () => {
     lsStore["ocv:locale"] = "en";
     lsStore["PARAGLIDE_LOCALE"] = "zh-CN";
     initLocale();
-    expect(currentLocale()).toBe("en");
+    expect(currentLocale()).toBe("ja");
   });
 
   // ── <html> attributes ──
@@ -177,7 +177,7 @@ describe("i18n", () => {
   // ── Static exports ──
 
   it("exports correct locales array", () => {
-    expect(locales).toEqual(["en", "zh-CN"]);
+    expect(locales).toEqual(["ja", "en", "zh-CN"]);
   });
 
   it("exports correct baseLocale", () => {
