@@ -599,15 +599,13 @@
                     {t("history_files", { count: String(run.filesTouchedCount) })}
                   </div>
                 {/if}
-                {#if run.status !== "running" && run.status !== "pending" && run.status !== "idle"}
-                  <button
-                    class="mt-2 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
-                    disabled={deletingRunId === run.runId}
-                    onclick={(e) => deleteRun(e, run.runId)}
-                  >
-                    {deletingRunId === run.runId ? "削除中..." : "削除"}
-                  </button>
-                {/if}
+                <button
+                  class="mt-2 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+                  disabled={deletingRunId === run.runId}
+                  onclick={(e) => deleteRun(e, run.runId)}
+                >
+                  {deletingRunId === run.runId ? "削除中..." : "削除"}
+                </button>
               </div>
             </div>
           </div>
