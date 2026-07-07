@@ -13,9 +13,6 @@
     getCliCommands,
     getCliModels,
     getModelsForAgent,
-    getCodexDefaultModel,
-    loadCodexModels,
-    loadCodexModelsLive,
     canResumeNow,
     TERMINAL_PHASES,
     getResumeWarning,
@@ -660,7 +657,7 @@
 
   // ── Agent-aware display helpers ──
   let effectiveAgent = $derived(store.run?.agent ?? store.agent);
-  let agentDisplayName = $derived(effectiveAgent === "codex" ? "Codex" : "Claude");
+  let agentDisplayName = $derived(effectiveAgent === "codex" ? "Mofu CLI" : "Mofu CLI");
 
   // ── Session info for InfoPanel ──
   let currentSessionInfo: SessionInfoData | null = $derived.by(() => {
@@ -750,9 +747,22 @@
   });
 
   // ── Provider-aware model list ──
-  // When a third-party platform is active and has a models list, use that instead of CLI models.
-  // Priority: credential.models (user-configured) > preset.models (static defaults)
+  let codexProviderModels = $state<CliModelInfo[]>([]);
+
   let platformModels = $derived.by((): CliModelInfo[] => {
+    const mofuModel = settings?.codex_provider?.model?.trim() || settings?.default_model?.trim();
+    if (effectiveAgent === "codex" || store.agent === "codex" || settings?.codex_provider) {
+      if (codexProviderModels.length) return codexProviderModels;
+      if (!mofuModel) return [];
+      return [
+        {
+          value: mofuModel,
+          displayName: mofuModel,
+          description: settings?.codex_provider?.name ?? "LM Studio",
+          supportsEffort: false,
+        },
+      ];
+    }
     const pid = store.platformId;
     if (!pid || pid === "anthropic") return [];
     const cred = findCredential(settings?.platform_credentials ?? [], pid);
@@ -769,7 +779,7 @@
   let effectiveModels = $derived(getModelsForAgent(effectiveAgent, { platformModels }));
   let currentEffort = $state("");
   let isCodexAgent = $derived(store.agent === "codex");
-  let assistantDisplayName = $derived(isCodexAgent ? "Codex" : t("chat_claude"));
+  let assistantDisplayName = $derived(isCodexAgent ? "Mofu CLI" : "Mofu CLI");
 
   // Effort guard: auto-clear effort when model doesn't support it;
   // also auto-populate default effort ("high") when empty and model supports it.
@@ -1087,17 +1097,6 @@
       .catch((e) => dbgWarn("skills", "listCodexSkillsRuntime failed", e));
   });
 
-  /** Upgrade the Codex model catalog from the live app-server session (control `model_list`),
-   *  which is authoritative for the running CLI. Falls back to the pre-session catalog
-   *  (loadCodexModels) when no live session. Runs once per (runId, sessionAlive) transition. */
-  $effect(() => {
-    const runId = store.run?.id;
-    const live = effectiveAgent === "codex" && store.sessionAlive && !!runId;
-    if (!live) return;
-    dbg("models", "live session up, refreshing codex catalog", { runId });
-    void loadCodexModelsLive(runId!);
-  });
-
   // ── Per-turn usage annotations in timeline ──
 
   let usageByTurn = $derived(new Map(store.turnUsages.map((tu) => [tu.turnIndex, tu])));
@@ -1364,6 +1363,19 @@
       if (!runId && !store.run) {
         store.agent = settings.default_agent === "codex" ? "codex" : "claude";
       }
+      if (!runId && !store.run && store.agent === "codex") {
+        const providerModel = settings.codex_provider?.model || settings.default_model || "";
+        if (providerModel) store.model = providerModel;
+      }
+      api
+        .getCodexProviderModels()
+        .then((list) => {
+          codexProviderModels = list.models;
+          if (!runId && !store.run && store.agent === "codex") {
+            store.model = list.defaultModel || list.models[0]?.value || store.model;
+          }
+        })
+        .catch((e) => dbgWarn("chat", "failed to load LM Studio provider models", e));
       remoteHosts = settings.remote_hosts ?? [];
       // Restore last target selection (must validate against current settings — a
       // configured host may have been removed since the value was persisted).
@@ -1415,9 +1427,7 @@
         if (store.agent === "codex") {
           // Codex: agent settings ARE the source of truth (injected as
           // -c model_reasoning_effort at spawn). Do NOT run the Claude migration below.
-          // Default to "medium" (Codex's own default reasoning effort) when unset so the
-          // effort selector always shows a highlighted value.
-          currentEffort = agentSettings?.effort || "medium";
+          currentEffort = agentSettings?.effort || "";
         } else {
           // Claude: read effort from CLI config (~/.claude/settings.json) — the authoritative
           // source. NOT from agentSettings.effort (that would cause --effort flag at spawn,
@@ -1456,8 +1466,6 @@
     }
     let selfHealDone = false;
     let selfHealInFlight = false;
-    // Codex model catalog (live from app-server). Fire-and-forget; 5min TTL cache.
-    void loadCodexModels();
     loadCliInfo().then(() => {
       // Self-heal: detect and fix contaminated default_model
       if (settings?.default_model && !selfHealDone && !selfHealInFlight) {
@@ -2410,8 +2418,7 @@
     // Async: effort
     if (newAgent === "codex") {
       // Codex: effort lives in agent settings (injected at spawn), not CLI config.
-      // Default to "medium" (Codex's default) when unset so the selector shows a value.
-      currentEffort = agentSettings?.effort || "medium";
+      currentEffort = agentSettings?.effort || "";
     } else if (store.features.effortSelector) {
       try {
         const cfg = await api.getCliConfig();
@@ -2708,12 +2715,27 @@
       // Codex (app-server): persist to agent settings + run meta (future spawns) AND, when the
       // session is alive, hot-switch via the control protocol so the override applies on the
       // NEXT turn. No Codex default_model concept — agent settings carry the per-agent model.
-      const [settingsResult, runResult] = await Promise.allSettled([
+      const currentProvider = settings?.codex_provider;
+      const [settingsResult, userSettingsResult, runResult] = await Promise.allSettled([
         api.updateAgentSettings("codex", { model: newModel }),
+        currentProvider
+          ? api.updateUserSettings({
+              codex_provider: { ...currentProvider, model: newModel },
+              default_model: newModel,
+            } as Partial<UserSettings>)
+          : Promise.resolve(null),
         persistRunModel(),
       ]);
       if (settingsResult.status === "rejected") {
         dbgWarn("chat", "failed to persist codex agent settings", settingsResult.reason);
+      }
+      if (userSettingsResult.status === "fulfilled" && userSettingsResult.value) {
+        settings = userSettingsResult.value;
+        codexProviderModels = codexProviderModels.map((m) =>
+          m.value === newModel ? m : { ...m, supportsEffort: false },
+        );
+      } else if (userSettingsResult.status === "rejected") {
+        dbgWarn("chat", "failed to persist Mofu provider model", userSettingsResult.reason);
       }
       if (runResult.status === "rejected") {
         dbgWarn("chat", "failed to persist codex run model", runResult.reason);
@@ -2871,6 +2893,7 @@
   }
 
   function appendCommandOutput(text: string) {
+    const content = sanitizeMofuCommandOutput(text);
     const cmdId = uuid();
     store.timeline = [
       ...store.timeline,
@@ -2878,10 +2901,17 @@
         kind: "command_output",
         id: cmdId,
         anchorId: cmdId,
-        content: text,
+        content,
         ts: new Date().toISOString(),
       },
     ];
+  }
+
+  function sanitizeMofuCommandOutput(content: string): string {
+    return content
+      .replaceAll("Codex can still see", "Mofu CLI can still see")
+      .replaceAll("Codex", "Mofu CLI")
+      .replaceAll("codex", "mofu");
   }
 
   async function handleRename(name: string) {
@@ -3051,7 +3081,7 @@
         appendCommandOutput(
           t("slash_notSupportedForAgent", {
             command: vDef.name,
-            agent: effectiveAgent === "codex" ? "Codex" : "Claude",
+            agent: "Mofu CLI",
           }),
         );
         return;
@@ -4524,7 +4554,8 @@
       model={effectiveAgent === "codex"
         ? codexDisplayModel(store.run?.model) ||
           codexDisplayModel(store.model) ||
-          getCodexDefaultModel() ||
+          settings?.codex_provider?.model ||
+          settings?.default_model ||
           ""
         : store.model}
       cost={store.usage.cost}

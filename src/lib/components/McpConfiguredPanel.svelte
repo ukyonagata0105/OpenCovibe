@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    listConfiguredMcpServers,
-    removeMcpServer,
-    listCodexMcpServers,
-    removeCodexMcpServer,
-  } from "$lib/api";
+  import { listCodexMcpServers, removeCodexMcpServer } from "$lib/api";
   import { dbg, dbgWarn } from "$lib/utils/debug";
   import { t } from "$lib/i18n/index.svelte";
   import type { ConfiguredMcpServer } from "$lib/types";
@@ -57,12 +52,8 @@
   async function loadServers() {
     loading = true;
     try {
-      const [claude, codex] = await Promise.all([
-        listConfiguredMcpServers(projectCwd || undefined),
-        listCodexMcpServers(projectCwd || undefined),
-      ]);
-      servers = [...claude, ...codex];
-      dbg("mcp-configured", "loaded", { claude: claude.length, codex: codex.length });
+      servers = await listCodexMcpServers(projectCwd || undefined);
+      dbg("mcp-configured", "loaded", { servers: servers.length });
     } catch (e) {
       dbgWarn("mcp-configured", "load error", e);
       servers = [];
@@ -73,11 +64,7 @@
 
   async function refreshServers() {
     try {
-      const [claude, codex] = await Promise.all([
-        listConfiguredMcpServers(projectCwd || undefined),
-        listCodexMcpServers(projectCwd || undefined),
-      ]);
-      servers = [...claude, ...codex];
+      servers = await listCodexMcpServers(projectCwd || undefined);
     } catch (e) {
       dbgWarn("mcp-configured", "refresh error", e);
     }
@@ -90,12 +77,11 @@
       onConfirm: async () => {
         operationLoading = serverKey(server);
         try {
-          let result;
-          if (server.agent === "codex") {
-            result = await removeCodexMcpServer(server.name, server.scope, projectCwd || undefined);
-          } else {
-            result = await removeMcpServer(server.name, server.scope, projectCwd || undefined);
-          }
+          const result = await removeCodexMcpServer(
+            server.name,
+            server.scope,
+            projectCwd || undefined,
+          );
           showToast(
             result.success ? t("mcp_removedServer", { name: server.name }) : result.message,
             result.success ? "success" : "error",
@@ -217,13 +203,6 @@
                 >
                   {server.scope}
                 </span>
-                {#if server.agent === "codex"}
-                  <span
-                    class="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  >
-                    {t("extend_agentBadge_codex")}
-                  </span>
-                {/if}
               </div>
             </div>
             {#if !(server.agent === "codex" && server.scope === "project")}
@@ -287,13 +266,6 @@
                 >
                   {selectedServer.scope}
                 </span>
-                {#if selectedServer.agent === "codex"}
-                  <span
-                    class="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  >
-                    {t("extend_agentBadge_codex")}
-                  </span>
-                {/if}
               </div>
             </div>
             <button

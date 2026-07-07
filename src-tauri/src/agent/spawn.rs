@@ -226,8 +226,8 @@ pub fn build_agent_command(
             if !prompt.is_empty() {
                 args.push(prompt.to_string());
             }
-            log::debug!("[spawn] codex command: codex {}", args.join(" "));
-            Ok(("codex".to_string(), args))
+            log::debug!("[spawn] mofu command: mofu {}", args.join(" "));
+            Ok(("mofu".to_string(), args))
         }
         _ => Err(format!(
             "Unsupported agent: {}. Supported: claude, codex",

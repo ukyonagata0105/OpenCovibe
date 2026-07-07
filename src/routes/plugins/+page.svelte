@@ -22,7 +22,7 @@
     searchCommunitySkills,
     getCommunitySkillDetail,
     installCommunitySkill,
-    listCodexSkills,
+    listMofuSkills,
     createCodexSkill,
     deleteCodexSkill,
     toggleCodexSkill,
@@ -178,7 +178,7 @@
     },
   ];
 
-  // ── Codex skill permission helpers ──
+  // ── Skill permission helpers ──
 
   function canEditSkill(s: StandaloneSkill): boolean {
     return s.agent === "codex" ? s.can_edit === true : s.can_edit !== false;
@@ -195,14 +195,7 @@
   }
 
   async function loadCombinedSkills(cwd?: string): Promise<StandaloneSkill[]> {
-    const [claude, codex] = await Promise.allSettled([
-      listStandaloneSkills(cwd),
-      listCodexSkills(cwd),
-    ]);
-    return [
-      ...(claude.status === "fulfilled" ? claude.value : []),
-      ...(codex.status === "fulfilled" ? codex.value : []),
-    ];
+    return listMofuSkills(cwd);
   }
 
   // ── Plugin key for unique operation tracking (avoids same-name Claude+Codex collisions) ──
@@ -265,8 +258,10 @@
     // Initialize from URL params
     const params = new URL(window.location.href).searchParams;
     const urlSection = params.get("section");
-    if (urlSection && ["skills", "mcp", "hooks", "plugins"].includes(urlSection)) {
+    if (urlSection && ["skills", "mcp", "hooks"].includes(urlSection)) {
       if (sectionCtx) sectionCtx.active = urlSection;
+    } else if (sectionCtx) {
+      sectionCtx.active = "skills";
     }
     const urlSource = params.get("source");
     if (urlSection === "skills" && (urlSource === "discover" || urlSource === "installed")) {
@@ -283,59 +278,14 @@
     loading = true;
     const warnings: string[] = [];
     try {
-      const results = await Promise.allSettled([
-        listMarketplacePlugins(),
-        listInstalledPlugins(),
-        listStandaloneSkills(projectCwd || undefined),
-        listMarketplaces(),
-        listCodexSkills(projectCwd || undefined),
-        listCodexInstalledPlugins(),
-      ]);
-
-      if (results[0].status === "fulfilled") {
-        plugins = results[0].value;
-      } else {
-        dbgWarn("plugins", "marketplace load error", results[0].reason);
-        warnings.push("marketplace plugins");
-      }
-
-      if (results[1].status === "fulfilled") {
-        installedPlugins = results[1].value;
-      } else {
-        dbgWarn("plugins", "installed plugins load error", results[1].reason);
-        warnings.push("installed plugins");
-      }
-
-      if (results[2].status === "fulfilled") {
-        skills = results[2].value;
-      } else {
-        dbgWarn("plugins", "skills load error", results[2].reason);
-        warnings.push("standalone skills");
-      }
-
-      if (results[3].status === "fulfilled") {
-        marketplaces = results[3].value;
-      } else {
-        dbgWarn("plugins", "marketplaces load error", results[3].reason);
-        warnings.push("marketplaces");
-      }
-
-      if (results[4].status === "fulfilled") {
-        skills = [...skills, ...results[4].value];
-      } else {
-        dbgWarn("plugins", "codex skills load error", results[4].reason);
-        warnings.push("codex skills");
-      }
-
-      if (results[5].status === "fulfilled") {
-        codexInstalledPlugins = results[5].value;
-      } else {
-        dbgWarn("plugins", "codex installed plugins load error", results[5].reason);
-        warnings.push("codex plugins");
-      }
+      skills = await listMofuSkills(projectCwd || undefined);
+      plugins = [];
+      installedPlugins = [];
+      codexInstalledPlugins = [];
+      marketplaces = [];
 
       loadWarnings = warnings;
-      loadError = warnings.length === 6;
+      loadError = false;
 
       dbg("plugins", "loaded", {
         marketplace: plugins.length,
@@ -427,9 +377,9 @@
     editorMode = "new";
     editorName = "";
     editorDescription = "Brief description";
-    editorContent = "# New Skill\n\nInstructions for Claude...";
+    editorContent = "# New Skill\n\nInstructions for Mofu CLI...";
     editorScope = "user";
-    editorAgent = "claude";
+    editorAgent = "codex";
     editorPath = "";
     selectedSkillKey = null;
   }
@@ -1036,29 +986,6 @@
             />
           </div>
 
-          <!-- Agent selector -->
-          <div>
-            <label class="block text-xs font-medium text-muted-foreground mb-1"
-              >{t("plugin_editorAgent")}</label
-            >
-            <div class="flex rounded-md border border-border p-0.5 w-fit">
-              <button
-                class="rounded px-2.5 py-1 text-xs font-medium transition-colors {editorAgent ===
-                'claude'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'}"
-                onclick={() => (editorAgent = "claude")}>{t("extend_agentBadge_claude")}</button
-              >
-              <button
-                class="rounded px-2.5 py-1 text-xs font-medium transition-colors {editorAgent ===
-                'codex'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'}"
-                onclick={() => (editorAgent = "codex")}>{t("extend_agentBadge_codex")}</button
-              >
-            </div>
-          </div>
-
           <div>
             <label class="block text-xs font-medium text-muted-foreground mb-1"
               >{t("plugin_editorScope")}</label
@@ -1082,7 +1009,7 @@
             <textarea
               class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
               rows="16"
-              placeholder="# Skill Title&#10;&#10;Instructions for Claude..."
+              placeholder="# Skill Title&#10;&#10;Instructions for Mofu CLI..."
               bind:value={editorContent}
             ></textarea>
           </div>
@@ -1639,7 +1566,7 @@
                     <textarea
                       class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
                       rows="16"
-                      placeholder="# Skill Title&#10;&#10;Instructions for Claude..."
+                      placeholder="# Skill Title&#10;&#10;Instructions for Mofu CLI..."
                       bind:value={editorContent}
                     ></textarea>
                   </div>

@@ -529,7 +529,16 @@ pub fn save(settings: &AllSettings) -> Result<(), String> {
 }
 
 pub fn get_user_settings() -> UserSettings {
-    load().user
+    let mut user = load().user;
+    if let Some(provider_model) = user
+        .codex_provider
+        .as_ref()
+        .map(|p| p.model.trim().to_string())
+        .filter(|m| !m.is_empty())
+    {
+        user.default_model = Some(provider_model);
+    }
+    user
 }
 
 /// Save web server config fields. Called by restart_with_config on success.
@@ -669,6 +678,32 @@ pub fn update_user_settings(patch: serde_json::Value) -> Result<UserSettings, St
     }
     if let Some(v) = patch.get("active_platform_id") {
         all.user.active_platform_id = if v.is_null() {
+            None
+        } else {
+            v.as_str().filter(|s| !s.is_empty()).map(|s| s.to_string())
+        };
+    }
+    if let Some(v) = patch.get("codex_provider") {
+        all.user.codex_provider = if v.is_null() {
+            None
+        } else {
+            Some(
+                serde_json::from_value(v.clone())
+                    .map_err(|e| format!("Invalid codex_provider: {}", e))?,
+            )
+        };
+        if let Some(provider_model) = all
+            .user
+            .codex_provider
+            .as_ref()
+            .map(|p| p.model.trim().to_string())
+            .filter(|m| !m.is_empty())
+        {
+            all.user.default_model = Some(provider_model);
+        }
+    }
+    if let Some(v) = patch.get("codex_transport") {
+        all.user.codex_transport = if v.is_null() {
             None
         } else {
             v.as_str().filter(|s| !s.is_empty()).map(|s| s.to_string())

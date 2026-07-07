@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
-  import { searchRuns } from "$lib/api";
+  import { searchRuns, softDeleteRuns } from "$lib/api";
   import type { RunSearchFilters, RunSearchResponse } from "$lib/types";
   import { t } from "$lib/i18n/index.svelte";
   import { dbg, dbgWarn } from "$lib/utils/debug";
@@ -16,6 +16,7 @@
   let requestId = 0;
   let searchInput = $state("");
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let deletingRunId = $state<string | null>(null);
 
   // Active status filter (quick pills)
   let activeStatusFilter = $state<string>("all");
@@ -212,6 +213,29 @@
 
   function goToRun(runId: string) {
     goto(`/chat?run=${runId}`);
+  }
+
+  function onRunKeydown(event: KeyboardEvent, runId: string) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      goToRun(runId);
+    }
+  }
+
+  async function deleteRun(event: MouseEvent, runId: string) {
+    event.stopPropagation();
+    if (!confirm("この履歴を削除しますか？")) return;
+    deletingRunId = runId;
+    error = "";
+    try {
+      await softDeleteRuns([runId]);
+      await loadData();
+      window.dispatchEvent(new Event("ocv:runs-changed"));
+    } catch (e) {
+      error = String(e);
+    } finally {
+      deletingRunId = null;
+    }
   }
 
   onMount(() => {
@@ -503,8 +527,11 @@
       <!-- Run cards (subtle opacity during reload to avoid layout jump) -->
       <div class="space-y-2 transition-opacity" class:opacity-50={loading}>
         {#each response.results as run}
-          <button
+          <div
+            role="button"
+            tabindex="0"
             onclick={() => goToRun(run.runId)}
+            onkeydown={(e) => onRunKeydown(e, run.runId)}
             class="w-full rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-muted/30"
           >
             <div class="flex items-start justify-between gap-3">
@@ -529,7 +556,9 @@
                   <span>{formatRelativeTime(run.startedAt)}</span>
                   {#if run.agent !== "claude"}
                     <span>·</span>
-                    <span class="text-emerald-500/70">{run.agent}</span>
+                    <span class="text-emerald-500/70"
+                      >{run.agent === "codex" ? "Mofu CLI" : run.agent}</span
+                    >
                   {/if}
                   {#if run.model}
                     <span>·</span>
@@ -570,9 +599,18 @@
                     {t("history_files", { count: String(run.filesTouchedCount) })}
                   </div>
                 {/if}
+                {#if run.status !== "running" && run.status !== "pending" && run.status !== "idle"}
+                  <button
+                    class="mt-2 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+                    disabled={deletingRunId === run.runId}
+                    onclick={(e) => deleteRun(e, run.runId)}
+                  >
+                    {deletingRunId === run.runId ? "削除中..." : "削除"}
+                  </button>
+                {/if}
               </div>
             </div>
-          </button>
+          </div>
         {/each}
       </div>
 

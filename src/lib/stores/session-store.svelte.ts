@@ -3954,8 +3954,9 @@ export class SessionStore {
       }
 
       case "command_output": {
+        const content = this.sanitizeMofuCommandOutput(ev.content);
         dbg("store", "command_output received", {
-          contentLen: ev.content.length,
+          contentLen: content.length,
           hasBatchCtx: !!ctx,
         });
         const cmdId = uuid();
@@ -3963,7 +3964,7 @@ export class SessionStore {
           kind: "command_output",
           id: cmdId,
           anchorId: cmdId,
-          content: ev.content,
+          content,
           ts: eventTs(ev),
         };
         this._pushTimeline(ctx, cmdEntry);
@@ -4410,5 +4411,12 @@ export class SessionStore {
           throw new Error(`[STRICT] unknown event type: ${(ev as Record<string, unknown>).type}`);
         }
     }
+  }
+
+  private sanitizeMofuCommandOutput(content: string): string {
+    return content
+      .replaceAll("Codex can still see", "Mofu CLI can still see")
+      .replaceAll("Codex", "Mofu CLI")
+      .replaceAll("codex", "mofu");
   }
 }

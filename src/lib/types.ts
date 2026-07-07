@@ -731,7 +731,7 @@ export interface StandaloneSkill {
   description: string;
   path: string;
   scope?: string;
-  agent?: "claude" | "codex";
+  agent?: "claude" | "codex" | "mofu";
   source_kind?: SkillSourceKind;
   enabled?: boolean;
   disabled_by?: SkillDisabledBy;

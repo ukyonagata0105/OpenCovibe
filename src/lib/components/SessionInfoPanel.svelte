@@ -292,12 +292,6 @@
         >
           {t("infoPanel_goConfig")}
         </button>
-        <button
-          class="text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded hover:bg-accent"
-          onclick={() => goto("/usage")}
-        >
-          {t("infoPanel_goUsage")}
-        </button>
       </div>
     </div>
   {/if}

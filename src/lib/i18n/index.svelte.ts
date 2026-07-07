@@ -5,6 +5,7 @@
  * reactive locale via Svelte 5 $state, localStorage persistence, async loading.
  */
 import en from "$messages/en.json";
+import ja from "$messages/ja.json";
 import zhCN from "$messages/zh-CN.json";
 import { LOCALE_REGISTRY, SUPPORTED_LOCALES, BASE_LOCALE, isLocale, getEntry } from "./registry";
 import type { Locale } from "./registry";
@@ -27,6 +28,7 @@ const LEGACY_STORAGE_KEY = "PARAGLIDE_LOCALE";
 // en + zh-CN are pre-cached (zero flicker for initial locales).
 // Future locales use async loaders for code splitting.
 const messageCache: Record<string, Record<string, string>> = {
+  ja: ja as Record<string, string>,
   en: en as Record<string, string>,
   "zh-CN": zhCN as Record<string, string>,
 };
@@ -35,6 +37,8 @@ const messageCache: Record<string, Record<string, string>> = {
 // Pre-cached locales still have loaders (loadMessages checks cache first).
 // To add a language: add a loader here + registry.ts entry + messages/<code>.json
 const loaders: Record<string, () => Promise<{ default: Record<string, string> }>> = {
+  ja: () => import("$messages/ja.json"),
+  en: () => import("$messages/en.json"),
   "zh-CN": () => import("$messages/zh-CN.json"),
 };
 
@@ -79,6 +83,7 @@ export function initLocale(): void {
   if (typeof window !== "undefined") {
     // 1. New key
     detected = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (detected === "en") detected = "ja";
 
     // 2. Legacy key migration
     if (!detected) {
@@ -106,9 +111,9 @@ export function initLocale(): void {
     }
   }
 
-  // 4. fallback
+  // 4. fallback: Mofu App is Japanese-first, while English remains the i18n safety net.
   if (!detected || !isLocale(detected)) {
-    detected = BASE_LOCALE;
+    detected = "ja";
   }
 
   _locale = detected;

@@ -2,8 +2,6 @@
   import {
     checkMcpRegistryHealth,
     searchMcpRegistry,
-    addMcpServer,
-    listConfiguredMcpServers,
     addCodexMcpServer,
     listCodexMcpServers,
   } from "$lib/api";
@@ -41,8 +39,6 @@
   let installedServers = $state<ConfiguredMcpServer[]>([]);
 
   // Install form
-  let installScope = $state<"local" | "user" | "project">("user");
-  let installAgent = $state<"claude" | "codex">("claude");
   let envValues = $state<Record<string, string>>({});
   let headerValues = $state<Record<string, string>>({});
 
@@ -53,17 +49,16 @@
   /** Check if a registry server matches an already-configured server (for the selected agent).
    *  Matches by URL (http) or package identifier in args (stdio). */
   function isInstalled(server: McpRegistryServer): boolean {
-    const agentServers = installedServers.filter((s) => (s.agent ?? "claude") === installAgent);
     // HTTP: match by URL
     if (server.remotes.length > 0) {
       const remoteUrl = server.remotes[0].url;
-      return agentServers.some((s) => s.url && s.url === remoteUrl);
+      return installedServers.some((s) => s.url && s.url === remoteUrl);
     }
     // stdio: match by package identifier in args
     if (server.packages.length > 0) {
       const pkgId = server.packages[0].identifier;
       if (pkgId) {
-        return agentServers.some(
+        return installedServers.some(
           (s) => s.args && s.args.some((a) => a === pkgId || a.includes(pkgId)),
         );
       }
@@ -73,11 +68,7 @@
 
   async function refreshInstalledServers() {
     try {
-      const [claude, codex] = await Promise.all([
-        listConfiguredMcpServers(projectCwd || undefined),
-        listCodexMcpServers(projectCwd || undefined),
-      ]);
-      installedServers = [...claude, ...codex];
+      installedServers = await listCodexMcpServers(projectCwd || undefined);
       dbg("mcp-discover", "installed servers", installedServers.length);
     } catch (e) {
       dbgWarn("mcp-discover", "failed to load installed servers", e);
@@ -205,77 +196,31 @@
     try {
       let result: PluginOperationResult;
 
-      if (installAgent === "codex") {
-        // Codex install path — sanitize name to valid TOML key
-        const codexName = toCodexKey(server.name);
-        if (transport === "http" && server.remotes.length > 0) {
-          const remote = server.remotes[0];
-          const hdrs: Record<string, string> = {};
-          for (const [k, v] of Object.entries(headerValues)) {
-            if (v.trim()) hdrs[k] = v.trim();
-          }
-          const config: Record<string, unknown> = { url: remote.url };
-          if (Object.keys(hdrs).length > 0) config.http_headers = hdrs;
-          result = await addCodexMcpServer(codexName, config);
-        } else if (server.packages.length > 0) {
-          const pkg = server.packages[0];
-          const env: Record<string, string> = {};
-          for (const [k, v] of Object.entries(envValues)) {
-            if (v.trim()) env[k] = v.trim();
-          }
-          const config: Record<string, unknown> = {
-            command: pkg.registryType === "pypi" ? "uvx" : "npx",
-            args: ["-y", pkg.identifier],
-          };
-          if (Object.keys(env).length > 0) config.env = env;
-          result = await addCodexMcpServer(codexName, config);
-        } else {
-          showToast(t("mcp_noPackageFound"), "error");
-          return;
+      const codexName = toCodexKey(server.name);
+      if (transport === "http" && server.remotes.length > 0) {
+        const remote = server.remotes[0];
+        const hdrs: Record<string, string> = {};
+        for (const [k, v] of Object.entries(headerValues)) {
+          if (v.trim()) hdrs[k] = v.trim();
         }
+        const config: Record<string, unknown> = { url: remote.url };
+        if (Object.keys(hdrs).length > 0) config.http_headers = hdrs;
+        result = await addCodexMcpServer(codexName, config);
+      } else if (server.packages.length > 0) {
+        const pkg = server.packages[0];
+        const env: Record<string, string> = {};
+        for (const [k, v] of Object.entries(envValues)) {
+          if (v.trim()) env[k] = v.trim();
+        }
+        const config: Record<string, unknown> = {
+          command: pkg.registryType === "pypi" ? "uvx" : "npx",
+          args: ["-y", pkg.identifier],
+        };
+        if (Object.keys(env).length > 0) config.env = env;
+        result = await addCodexMcpServer(codexName, config);
       } else {
-        // Claude install path (existing)
-        if (transport === "http" && server.remotes.length > 0) {
-          const remote = server.remotes[0];
-          const hdrs: Record<string, string> = {};
-          for (const [k, v] of Object.entries(headerValues)) {
-            if (v.trim()) hdrs[k] = v.trim();
-          }
-          result = await addMcpServer(
-            server.name,
-            "http",
-            installScope,
-            projectCwd || undefined,
-            undefined,
-            remote.url,
-            undefined,
-            Object.keys(hdrs).length > 0 ? hdrs : undefined,
-          );
-        } else if (server.packages.length > 0) {
-          const pkg = server.packages[0];
-          const env: Record<string, string> = {};
-          for (const [k, v] of Object.entries(envValues)) {
-            if (v.trim()) env[k] = v.trim();
-          }
-          const config: Record<string, unknown> = {
-            type: "stdio",
-            command: pkg.registryType === "pypi" ? "uvx" : "npx",
-            args: ["-y", pkg.identifier],
-          };
-          if (Object.keys(env).length > 0) {
-            config.env = env;
-          }
-          result = await addMcpServer(
-            server.name,
-            "stdio",
-            installScope,
-            projectCwd || undefined,
-            JSON.stringify(config),
-          );
-        } else {
-          showToast(t("mcp_noPackageFound"), "error");
-          return;
-        }
+        showToast(t("mcp_noPackageFound"), "error");
+        return;
       }
 
       showToast(
@@ -345,51 +290,6 @@
       bind:value={query}
       oninput={handleSearch}
     />
-  </div>
-
-  <!-- Agent selector -->
-  <div class="flex rounded-md border border-border p-0.5 shrink-0">
-    <button
-      class="rounded px-2 py-1 text-xs font-medium transition-colors {installAgent === 'claude'
-        ? 'bg-primary text-primary-foreground'
-        : 'text-muted-foreground hover:text-foreground'}"
-      onclick={() => (installAgent = "claude")}>{t("extend_agentBadge_claude")}</button
-    >
-    <button
-      class="rounded px-2 py-1 text-xs font-medium transition-colors {installAgent === 'codex'
-        ? 'bg-primary text-primary-foreground'
-        : 'text-muted-foreground hover:text-foreground'}"
-      onclick={() => {
-        installAgent = "codex";
-        installScope = "user";
-      }}>{t("extend_agentBadge_codex")}</button
-    >
-  </div>
-
-  <!-- Scope selector -->
-  <div class="flex rounded-md border border-border p-0.5 shrink-0">
-    <button
-      class="rounded px-2 py-1 text-xs font-medium transition-colors {installScope === 'user'
-        ? 'bg-primary text-primary-foreground'
-        : 'text-muted-foreground hover:text-foreground'}"
-      onclick={() => (installScope = "user")}>{t("mcp_scopeUser")}</button
-    >
-    <button
-      class="rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed {installScope ===
-      'project'
-        ? 'bg-primary text-primary-foreground'
-        : 'text-muted-foreground hover:text-foreground'}"
-      disabled={!projectCwd || installAgent === "codex"}
-      onclick={() => (installScope = "project")}>{t("mcp_scopeProject")}</button
-    >
-    <button
-      class="rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed {installScope ===
-      'local'
-        ? 'bg-primary text-primary-foreground'
-        : 'text-muted-foreground hover:text-foreground'}"
-      disabled={!projectCwd || installAgent === "codex"}
-      onclick={() => (installScope = "local")}>{t("mcp_scopeLocal")}</button
-    >
   </div>
 </div>
 
@@ -669,7 +569,7 @@
                     {operationLoading === detail.name
                       ? t("mcp_adding")
                       : t("mcp_addToScope", {
-                          scope: installAgent === "codex" ? "codex" : installScope,
+                          scope: "Mofu CLI",
                         })}
                   </button>
                 {/if}

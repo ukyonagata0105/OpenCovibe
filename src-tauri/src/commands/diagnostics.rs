@@ -17,7 +17,7 @@ pub async fn check_agent_cli(agent: String) -> Result<CliCheckResult, String> {
     // `claude` (or isn't on PATH) would falsely report "not installed" while sessions work.
     let resolved = match agent.as_str() {
         "claude" => crate::agent::claude_stream::resolve_claude_path(),
-        "codex" => "codex".to_string(),
+        "codex" => "mofu".to_string(),
         _ => return Err(format!("Unknown agent: {}", agent)),
     };
 
@@ -103,7 +103,7 @@ pub async fn check_codex_auth() -> Result<CodexAuthResult, String> {
         cli_check.version
     );
 
-    // Run `codex login status` to check auth (12s timeout — matches Claude OAuth check).
+    // Run `mofu login status` to check auth (12s timeout — matches Claude OAuth check).
     // Spawn the resolved path (cli_check.path), not the bare "codex" — Windows .cmd shim.
     use tokio::process::Command as TokioCommand;
     let codex_exe = cli_check.path.as_deref().unwrap_or("codex");
@@ -120,7 +120,7 @@ pub async fn check_codex_auth() -> Result<CodexAuthResult, String> {
         Ok(Ok(o)) => o,
         Ok(Err(e)) => {
             log::debug!(
-                "[diagnostics] check_codex_auth: failed to execute 'codex login status': {}",
+                "[diagnostics] check_codex_auth: failed to execute 'mofu login status': {}",
                 e
             );
             return Ok(CodexAuthResult {
@@ -132,7 +132,7 @@ pub async fn check_codex_auth() -> Result<CodexAuthResult, String> {
             });
         }
         Err(_) => {
-            log::debug!("[diagnostics] check_codex_auth: 'codex login status' timed out (12s)");
+            log::debug!("[diagnostics] check_codex_auth: 'mofu login status' timed out (12s)");
             return Ok(CodexAuthResult {
                 installed: true,
                 version: cli_check.version,
@@ -192,50 +192,110 @@ pub async fn check_codex_auth() -> Result<CodexAuthResult, String> {
     })
 }
 
-/// Run `codex doctor --json` and return its structured report verbatim for the diagnostics UI.
-/// Shape: `{schemaVersion, generatedAt, overallStatus, codexVersion, checks:{<id>:{id,category,
-/// status,summary,details,remediation,durationMs}}}`. Richer than `codex login status` —
-/// covers install/config/auth/runtime/app-server health. 25s timeout (doctor probes more,
-/// incl. network). Returns Err only when codex is absent / the run can't start / output isn't JSON.
+/// Return the Mofu App diagnostic report used by the settings UI.
 #[tauri::command]
 pub async fn run_codex_doctor() -> Result<serde_json::Value, String> {
-    log::debug!("[diagnostics] run_codex_doctor: starting");
+    log::debug!("[diagnostics] run_mofu_doctor: starting");
     let cli_check = check_agent_cli("codex".to_string()).await?;
-    if !cli_check.found {
-        return Err("Codex CLI not installed".to_string());
+    let settings = crate::storage::settings::get_user_settings();
+    let provider = settings.codex_provider;
+    let mut checks = serde_json::Map::new();
+
+    checks.insert(
+        "mofu-cli".to_string(),
+        serde_json::json!({
+            "id": "mofu-cli",
+            "category": "runtime",
+            "status": if cli_check.found { "ok" } else { "fail" },
+            "summary": if cli_check.found { "Mofu CLI is installed" } else { "Mofu CLI is not installed" },
+            "details": cli_check.path,
+            "remediation": if cli_check.found { "" } else { "Install Mofu App again so the bundled mofu command is available." },
+            "durationMs": 0
+        }),
+    );
+
+    let provider_configured = provider
+        .as_ref()
+        .is_some_and(|p| !p.base_url.trim().is_empty() && !p.model.trim().is_empty());
+    checks.insert(
+        "lm-studio-provider".to_string(),
+        serde_json::json!({
+            "id": "lm-studio-provider",
+            "category": "provider",
+            "status": if provider_configured { "ok" } else { "fail" },
+            "summary": if provider_configured { "LM Studio provider is configured" } else { "LM Studio provider is incomplete" },
+            "details": provider.as_ref().map(|p| format!("{} {}", p.base_url, p.model)).unwrap_or_default(),
+            "remediation": "Set Base URL and model, then save the provider settings.",
+            "durationMs": 0
+        }),
+    );
+
+    let mut models_status = "warn";
+    let mut models_summary = "LM Studio model list was not checked".to_string();
+    let mut models_details = String::new();
+    if let Some(p) = provider.as_ref() {
+        if !p.base_url.trim().is_empty() {
+            let url = format!("{}/models", p.base_url.trim_end_matches('/'));
+            let mut request = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(5))
+                .no_proxy()
+                .build()
+                .map_err(|e| format!("Failed to create HTTP client: {}", e))?
+                .get(url);
+            if let Some(api_key) = p.api_key.as_ref().filter(|v| !v.trim().is_empty()) {
+                request = request.bearer_auth(api_key);
+            }
+            match request.send().await {
+                Ok(response) if response.status().is_success() => {
+                    models_status = "ok";
+                    models_summary = "LM Studio model endpoint is reachable".to_string();
+                    models_details = format!("Selected model: {}", p.model);
+                }
+                Ok(response) => {
+                    models_status = "fail";
+                    models_summary = format!("LM Studio returned HTTP {}", response.status());
+                }
+                Err(e) => {
+                    models_status = "fail";
+                    models_summary = format!("Could not reach LM Studio: {}", e);
+                }
+            }
+        }
     }
-    let aug_path = augmented_path();
-    let codex_exe = cli_check.path.as_deref().unwrap_or("codex");
+    checks.insert(
+        "lm-studio-models".to_string(),
+        serde_json::json!({
+            "id": "lm-studio-models",
+            "category": "provider",
+            "status": models_status,
+            "summary": models_summary,
+            "details": models_details,
+            "remediation": "Start LM Studio server and verify the OpenAI-compatible Base URL.",
+            "durationMs": 0
+        }),
+    );
 
-    use tokio::process::Command as TokioCommand;
-    let mut cmd = TokioCommand::new(codex_exe);
-    // --no-color: keep JSON clean of ANSI; --json: machine-readable.
-    cmd.args(["doctor", "--json", "--no-color"])
-        .env("PATH", &aug_path)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .hide_console()
-        .kill_on_drop(true);
-
-    let output = match tokio::time::timeout(std::time::Duration::from_secs(25), cmd.output()).await
+    let overall = if checks
+        .values()
+        .any(|v| v.get("status").and_then(|s| s.as_str()) == Some("fail"))
     {
-        Ok(Ok(o)) => o,
-        Ok(Err(e)) => return Err(format!("failed to run codex doctor: {}", e)),
-        Err(_) => return Err("codex doctor timed out (25s)".to_string()),
+        "fail"
+    } else if checks
+        .values()
+        .any(|v| v.get("status").and_then(|s| s.as_str()) == Some("warn"))
+    {
+        "warn"
+    } else {
+        "ok"
     };
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // doctor exits non-zero when overallStatus is fail/warn — that's a valid report, not an error.
-    // Only treat unparseable output as a failure.
-    serde_json::from_str::<serde_json::Value>(stdout.trim()).map_err(|e| {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        log::warn!("[diagnostics] run_codex_doctor: non-JSON output: {}", e);
-        format!(
-            "codex doctor produced no JSON ({}). stderr: {}",
-            e,
-            stderr.trim()
-        )
-    })
+    Ok(serde_json::json!({
+        "schemaVersion": 1,
+        "generatedAt": crate::models::now_iso(),
+        "overallStatus": overall,
+        "codexVersion": cli_check.version.unwrap_or_else(|| "unknown".to_string()),
+        "checks": checks
+    }))
 }
 
 // ── Local proxy detection ──

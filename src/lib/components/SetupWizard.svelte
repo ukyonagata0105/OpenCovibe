@@ -247,30 +247,20 @@
 
   // Display names used in agent-aware i18n strings (setup_cliNotFound,
   // setup_authDesc, setup_oauthDesc).
-  let agentDisplayName = $derived(targetAgent === "codex" ? "Codex" : "Claude Code");
-  let accountDisplayName = $derived(targetAgent === "codex" ? "ChatGPT" : "Anthropic");
+  let agentDisplayName = $derived("Mofu CLI");
+  let accountDisplayName = $derived("LM Studio");
 </script>
 
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-background">
   <div class="w-full max-w-xl mx-auto px-6">
     {#if step === "agent_choice"}
-      <!-- Agent choice step — user picks which CLI to set up -->
+      <!-- Mofu App only connects to Mofu CLI. -->
       <div class="flex flex-col gap-6">
         <div class="text-center">
           <h2 class="text-xl font-semibold">{t("setup_agentChoiceTitle")}</h2>
           <p class="text-sm text-muted-foreground mt-2">{t("setup_agentChoiceDesc")}</p>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button
-            class="flex flex-col items-start gap-1 rounded-lg border border-border bg-card px-4 py-3 text-left hover:bg-accent transition-colors"
-            onclick={() => {
-              targetAgent = "claude";
-              step = "checking";
-            }}
-          >
-            <span class="text-sm font-medium">{t("setup_agentClaudeName")}</span>
-            <span class="text-xs text-muted-foreground">{t("setup_agentClaudeDesc")}</span>
-          </button>
+        <div class="grid grid-cols-1 gap-3">
           <button
             class="flex flex-col items-start gap-1 rounded-lg border border-border bg-card px-4 py-3 text-left hover:bg-accent transition-colors"
             onclick={() => {

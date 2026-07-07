@@ -63,7 +63,7 @@ export function getCodexDefaultModel(): string | undefined {
  * Centralizes the `agent === "codex" ? getCodexModels() : …CLI/platform…` branch that
  * was copy-pasted across ModelSelector, SessionStatusBar, and the chat page.
  *
- * - Codex → the live Codex catalog (platform models don't apply).
+ * - Mofu CLI/Codex transport → provider models when configured, else the live catalog.
  * - Other agents → platform models when present (see `merge`), else the CLI catalog.
  *   - `merge: false` (default): platform models REPLACE the CLI list when non-empty.
  *   - `merge: true`: platform models are PREPENDED to the CLI list (used where label
@@ -73,8 +73,11 @@ export function getModelsForAgent(
   agent: string,
   opts: { platformModels?: CliModelInfo[]; merge?: boolean } = {},
 ): CliModelInfo[] {
-  if (agent === "codex") return getCodexModels();
   const platform = opts.platformModels ?? [];
+  if (agent === "codex") {
+    if (opts.merge) return [...platform, ...getCodexModels()];
+    return platform.length > 0 ? platform : getCodexModels();
+  }
   if (opts.merge) return [...platform, ...getCliModels()];
   return platform.length > 0 ? platform : getCliModels();
 }

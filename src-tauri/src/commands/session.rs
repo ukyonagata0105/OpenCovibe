@@ -531,6 +531,17 @@ pub(crate) async fn start_session_impl(
     let user_settings = storage::settings::get_user_settings();
     let mut adapter_settings =
         adapter::build_adapter_settings(&agent_settings, &user_settings, meta.model.clone());
+    if meta.agent == "codex" {
+        if let Some(provider_model) = adapter_settings
+            .codex_provider
+            .as_ref()
+            .map(|p| p.model.trim().to_string())
+            .filter(|m| !m.is_empty())
+        {
+            adapter_settings.model = Some(provider_model.clone());
+            storage::runs::update_run_model(&run_id, &provider_model).ok();
+        }
+    }
 
     // 2a. Apply per-session permission_mode override (e.g. ExitPlanMode → acceptEdits).
     //     Session-scoped: does not touch persisted user settings. Must run BEFORE spawn
@@ -1885,7 +1896,7 @@ pub(crate) fn codex_approval_for(perm: Option<&str>) -> String {
     }
 }
 
-/// Auto-fallback probe: does the installed Codex CLI support the app-server transport?
+/// Auto-fallback probe: does the installed Mofu CLI support the app-server transport?
 ///
 /// Codex now defaults to app-server (see `commands/runs.rs`), but an old/incompatible CLI
 /// would reject `codex app-server --enable …` and the session would die before the handshake
@@ -1899,8 +1910,8 @@ pub(crate) fn codex_appserver_supported() -> bool {
     use std::sync::OnceLock;
     static CACHE: OnceLock<bool> = OnceLock::new();
     *CACHE.get_or_init(|| {
-        let Some(bin) = claude_stream::which_binary("codex") else {
-            log::warn!("[codex] app-server probe: codex binary not found → exec fallback");
+        let Some(bin) = claude_stream::which_binary("mofu") else {
+            log::warn!("[mofu] app-server probe: mofu binary not found -> exec fallback");
             return false;
         };
         let out = std::process::Command::new(&bin)
@@ -1955,8 +1966,8 @@ async fn spawn_codex_appserver_process(
 > {
     use tokio::process::Command;
 
-    let codex_bin = claude_stream::which_binary("codex")
-        .ok_or_else(|| "Codex CLI not found in PATH".to_string())?;
+    let codex_bin = claude_stream::which_binary("mofu")
+        .ok_or_else(|| "Mofu CLI not found in PATH".to_string())?;
 
     let mut args: Vec<String> = vec![
         "app-server".into(),
@@ -2002,7 +2013,7 @@ async fn spawn_codex_appserver_process(
 
     let mut child = cmd
         .spawn()
-        .map_err(|e| format!("Failed to spawn codex app-server: {}", e))?;
+        .map_err(|e| format!("Failed to spawn mofu app-server: {}", e))?;
     let stdin = child.stdin.take().ok_or("no app-server stdin")?;
     let stdout = child.stdout.take().ok_or("no app-server stdout")?;
     let stderr = child.stderr.take().ok_or("no app-server stderr")?;
@@ -2588,8 +2599,8 @@ async fn codex_side_question(
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
-    let codex_bin = claude_stream::which_binary("codex")
-        .ok_or_else(|| "Codex CLI not found in PATH".to_string())?;
+    let codex_bin = claude_stream::which_binary("mofu")
+        .ok_or_else(|| "Mofu CLI not found in PATH".to_string())?;
 
     let wrapped_question = format!(
         "The user is asking a side question. Answer it concisely. \

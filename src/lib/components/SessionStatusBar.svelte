@@ -373,6 +373,8 @@
     if (fuzzy) return fuzzy.displayName;
     return model;
   });
+
+  let agentLabel = $derived(agent === "codex" || agent === "claude" ? "Mofu CLI" : agent);
 </script>
 
 <div class="border-b border-border bg-muted/50 font-mono text-xs text-foreground/70">
@@ -411,7 +413,7 @@
               ? 'bg-green-500 animate-pulse'
               : 'bg-foreground/20'}"
           ></span>
-          <span class="text-foreground font-medium">{agent}</span>
+          <span class="text-foreground font-medium">{agentLabel}</span>
         </button>
       {:else}
         <span
@@ -449,7 +451,7 @@
       {/if}
 
       {#if !onStatusClick}
-        <span class="text-foreground font-medium">{agent}</span>
+        <span class="text-foreground font-medium">{agentLabel}</span>
       {/if}
 
       {#if mode}
@@ -869,7 +871,7 @@
 
         {#if cliVersion}
           {#if agent === "codex"}
-            <span class="text-foreground/30 hidden sm:inline">Codex v{cliVersion}</span>
+            <span class="text-foreground/30 hidden sm:inline">Mofu CLI v{cliVersion}</span>
           {:else}
             <button
               class="text-foreground/30 hover:text-foreground/60 transition-colors hidden sm:inline"

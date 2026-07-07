@@ -445,7 +445,6 @@
     { path: "/explorer", label: () => t("nav_explorer"), icon: "folder" },
     { path: "/plugins", label: () => t("nav_extend"), icon: "zap" },
     { path: "/memory", label: () => t("nav_memory"), icon: "book" },
-    { path: "/usage", label: () => t("nav_usage"), icon: "chart" },
     { path: "/history", label: () => t("nav_history"), icon: "clock" },
     { path: "/settings", label: () => t("nav_settings"), icon: "settings" },
   ];
@@ -1036,8 +1035,6 @@
     { id: "skills", label: () => t("sidebar_skills"), icon: "sparkles" },
     { id: "mcp", label: () => t("sidebar_mcpServers"), icon: "server" },
     { id: "hooks", label: () => t("sidebar_hooks"), icon: "webhook" },
-    { id: "plugins", label: () => t("sidebar_plugins"), icon: "package" },
-    { id: "agents", label: () => t("sidebar_agents"), icon: "agents" },
   ];
 
   let pluginActiveSection = $state<string>("skills");
@@ -1401,7 +1398,7 @@
             <button
               class="text-xs text-muted-foreground hover:text-muted-foreground transition-colors cursor-pointer"
               onclick={() => (showAbout = true)}
-              title="About OpenCovibe">v0.1</button
+              title="About Mofu App">v0.1</button
             >
           </div>
           <div class="relative mx-auto mb-0.5">
@@ -1538,24 +1535,6 @@
           <span class="flex-1 min-w-0 truncate text-sm font-medium text-sidebar-foreground"
             >{pageName}</span
           >
-          <button
-            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors duration-150"
-            onclick={() => (showCliBrowser = true)}
-            title={t("cliSync_title")}
-          >
-            <svg
-              class="h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path
-                d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-              /></svg
-            >
-          </button>
           <button
             class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors duration-150"
             onclick={newChat}

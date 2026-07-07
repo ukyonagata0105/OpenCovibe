@@ -11,12 +11,9 @@
 
   let open = $state(false);
 
-  const agents = [
-    { id: "claude", label: "Claude" },
-    { id: "codex", label: "Codex" },
-  ];
+  const agents = [{ id: "codex", label: "Mofu CLI" }];
 
-  let currentLabel = $derived(agents.find((a) => a.id === value)?.label ?? "Claude");
+  let currentLabel = $derived(agents.find((a) => a.id === value)?.label ?? "Mofu CLI");
 
   function select(id: string) {
     value = id;

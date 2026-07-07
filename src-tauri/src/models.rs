@@ -373,8 +373,8 @@ fn default_wire_api() -> String {
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
-            default_agent: "claude".to_string(),
-            default_model: None,
+            default_agent: "codex".to_string(),
+            default_model: Some("qwen3.5-0.8b-mlx".to_string()),
             allowed_tools: vec![],
             working_directory: None,
             provider_mode: "local".to_string(),
@@ -389,10 +389,18 @@ impl Default for UserSettings {
             remote_hosts: vec![],
             platform_credentials: vec![],
             active_platform_id: None,
-            codex_provider: None,
-            codex_transport: None,
+            codex_provider: Some(CodexProviderCredential {
+                id: "lm-studio".to_string(),
+                name: "LM Studio".to_string(),
+                base_url: "http://172.17.30.209:1234/v1".to_string(),
+                env_key: "LM_STUDIO_API_KEY".to_string(),
+                wire_api: "responses".to_string(),
+                model: "qwen3.5-0.8b-mlx".to_string(),
+                api_key: Some("lm-studio".to_string()),
+            }),
+            codex_transport: Some("app_server".to_string()),
             ui_zoom: None,
-            onboarding_completed: false,
+            onboarding_completed: true,
             web_server_enabled: None,
             web_server_token: None,
             web_server_port: None,
@@ -511,7 +519,6 @@ pub struct AllSettings {
 impl Default for AllSettings {
     fn default() -> Self {
         let mut agents = std::collections::HashMap::new();
-        agents.insert("claude".to_string(), AgentSettings::default_for("claude"));
         agents.insert("codex".to_string(), AgentSettings::default_for("codex"));
         Self {
             user: UserSettings::default(),

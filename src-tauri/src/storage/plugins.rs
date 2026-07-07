@@ -454,7 +454,7 @@ pub fn read_skill_content(path: &str, cwd: &str) -> Result<String, String> {
 
 // ── CLI plugin command execution ──
 
-use crate::agent::claude_stream::{augmented_path, resolve_claude_path};
+use crate::agent::claude_stream::{augmented_path, resolve_codex_path};
 use crate::process_ext::HideConsole;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
@@ -470,7 +470,7 @@ pub struct PluginCommandResult {
     pub exit_code: Option<i32>,
 }
 
-/// Run a `claude plugin ...` CLI command and capture output.
+/// Run a `mofu plugin ...` CLI command and capture output.
 ///
 /// `args` is the argument list after `plugin` — e.g., `["install", "frontend-design", "--scope", "user"]`.
 /// `cwd` sets the working directory for the command (required for `--scope project`/`local`).
@@ -481,17 +481,17 @@ pub async fn run_plugin_command(
     args: &[&str],
     cwd: Option<&str>,
 ) -> Result<PluginCommandResult, String> {
-    let claude_bin = resolve_claude_path();
+    let mofu_bin = resolve_codex_path();
     let path_env = augmented_path();
 
     log::debug!(
         "[plugins] run_plugin_command: {} plugin {} (cwd={:?})",
-        claude_bin,
+        mofu_bin,
         args.join(" "),
         cwd
     );
 
-    let mut cmd = Command::new(&claude_bin);
+    let mut cmd = Command::new(&mofu_bin);
     cmd.arg("plugin");
     for arg in args {
         cmd.arg(arg);
@@ -500,15 +500,15 @@ pub async fn run_plugin_command(
         cmd.current_dir(dir);
     }
     cmd.env("PATH", &path_env)
-        .env_remove("CLAUDECODE") // Allow running inside a Claude Code session
+        .env_remove("CLAUDECODE")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
     cmd.hide_console().kill_on_drop(true);
     let child = cmd.spawn().map_err(|e| {
-        log::error!("[plugins] failed to spawn claude: {}", e);
-        format!("Failed to spawn claude: {}", e)
+        log::error!("[plugins] failed to spawn mofu: {}", e);
+        format!("Failed to spawn mofu: {}", e)
     })?;
 
     let result = timeout(PLUGIN_CMD_TIMEOUT, child.wait_with_output()).await;
@@ -821,6 +821,13 @@ fn codex_user_skills_dir() -> PathBuf {
         .unwrap_or_default()
 }
 
+/// $HOME/.mofumofu/skills/
+fn mofu_user_skills_dir() -> PathBuf {
+    crate::storage::home_dir()
+        .map(|h| PathBuf::from(h).join(".mofumofu").join("skills"))
+        .unwrap_or_default()
+}
+
 /// $CODEX_HOME/skills/
 fn codex_legacy_skills_dir() -> Result<PathBuf, String> {
     crate::storage::cli_config::codex_home_dir().map(|d| d.join("skills"))
@@ -1070,6 +1077,94 @@ fn scan_codex_skills_dir_with_roots(
 /// List all Codex skills following the upstream scan order.
 pub fn list_codex_skills(cwd: Option<&str>) -> Vec<StandaloneSkill> {
     list_codex_skills_with_overrides(cwd, None, None, None, None)
+}
+
+/// List skills visible to Mofu App.
+///
+/// This intentionally excludes $CODEX_HOME/skills and bundled Codex system skills.
+/// Mofu reads machine-level integrated skills from ~/.agents/skills and, when
+/// present, Mofu-specific skills from ~/.mofumofu/skills. Project-local skills
+/// are read from .agents/skills and .mofumofu/skills along the project layers.
+pub fn list_mofu_skills(cwd: Option<&str>) -> Vec<StandaloneSkill> {
+    let mut skills = Vec::new();
+    let mut seen_canonical = std::collections::HashSet::new();
+    let mut allowed_roots = Vec::new();
+
+    let mofu_user_dir = mofu_user_skills_dir();
+    let agents_user_dir = codex_user_skills_dir();
+
+    for dir in [&mofu_user_dir, &agents_user_dir] {
+        if dir.is_dir() {
+            if let Ok(c) = std::fs::canonicalize(dir) {
+                allowed_roots.push(c);
+            }
+        }
+    }
+
+    if let Some(cwd_str) = cwd {
+        if !cwd_str.is_empty() {
+            for layer in project_layers(cwd_str) {
+                for project_skills in [
+                    layer.join(".mofumofu").join("skills"),
+                    layer.join(".agents").join("skills"),
+                ] {
+                    if project_skills.is_dir() {
+                        if let Ok(c) = std::fs::canonicalize(&project_skills) {
+                            allowed_roots.push(c);
+                        }
+                    }
+                    scan_codex_skills_dir_with_roots(
+                        &project_skills,
+                        "project",
+                        SkillSourceKind::ProjectAgents,
+                        true,
+                        &mut skills,
+                        &allowed_roots,
+                        None,
+                    );
+                }
+            }
+        }
+    }
+
+    scan_codex_skills_dir_with_roots(
+        &mofu_user_dir,
+        "user",
+        SkillSourceKind::User,
+        true,
+        &mut skills,
+        &allowed_roots,
+        None,
+    );
+    scan_codex_skills_dir_with_roots(
+        &agents_user_dir,
+        "user",
+        SkillSourceKind::User,
+        true,
+        &mut skills,
+        &allowed_roots,
+        None,
+    );
+
+    skills.retain(|s| {
+        let p = PathBuf::from(&s.path);
+        let key = std::fs::canonicalize(&p).unwrap_or(p);
+        seen_canonical.insert(key)
+    });
+    for skill in &mut skills {
+        skill.agent = "mofu".to_string();
+        skill.can_edit = false;
+        skill.can_delete = false;
+        skill.can_toggle = false;
+    }
+    skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+    log::debug!(
+        "[plugins] list_mofu_skills: found {} skills (cwd={:?})",
+        skills.len(),
+        cwd
+    );
+    skills
 }
 
 /// Inner implementation with injectable paths for testing.

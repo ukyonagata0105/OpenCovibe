@@ -1,4 +1,4 @@
-//! Live Codex model catalog via `codex app-server`.
+//! Live Mofu model catalog via `mofu app-server`.
 //!
 //! Codex's `exec` path has no control protocol (unlike Claude's stream-json), so we
 //! cannot enumerate models the way `control::get_cli_info` does. Instead we drive the
@@ -71,15 +71,15 @@ pub async fn get_codex_models(
         }
     }
 
-    if which_binary("codex").is_none() {
+    if which_binary("mofu").is_none() {
         return Err(CliInfoError {
             code: "cli_not_found".to_string(),
-            message: "Codex CLI binary not found".to_string(),
+            message: "Mofu CLI binary not found".to_string(),
         });
     }
 
     let path_env = augmented_path();
-    let mut cmd = tokio::process::Command::new("codex");
+    let mut cmd = tokio::process::Command::new("mofu");
     cmd.arg("app-server")
         .env("PATH", &path_env)
         .stdin(std::process::Stdio::piped())
@@ -89,15 +89,15 @@ pub async fn get_codex_models(
         .kill_on_drop(true);
 
     let mut child = cmd.spawn().map_err(|e| {
-        log::error!("[codex_control] failed to spawn codex app-server: {}", e);
+        log::error!("[codex_control] failed to spawn mofu app-server: {}", e);
         CliInfoError {
             code: "cli_not_found".to_string(),
-            message: format!("Failed to spawn codex app-server: {}", e),
+            message: format!("Failed to spawn mofu app-server: {}", e),
         }
     })?;
 
     log::debug!(
-        "[codex_control] spawned codex app-server pid={:?}",
+        "[codex_control] spawned mofu app-server pid={:?}",
         child.id()
     );
 
@@ -114,9 +114,9 @@ pub async fn get_codex_models(
         "method": "initialize",
         "params": {
             "clientInfo": {
-                "name": "opencovibe",
+                "name": "mofu_app",
                 "version": env!("CARGO_PKG_VERSION"),
-                "title": "OpenCovibe"
+                "title": "Mofu App"
             }
         }
     });

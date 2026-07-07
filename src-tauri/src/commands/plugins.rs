@@ -309,11 +309,11 @@ fn codex_json_plugin(v: &serde_json::Value) -> Option<InstalledPlugin> {
     })
 }
 
-/// Authoritative installed-plugin list via `codex plugin list --json` (handles `.tmp` plugins +
+/// Authoritative installed-plugin list via `mofu plugin list --json` (handles `.tmp` plugins +
 /// install/auth policy that the cache-dir walk misses). Returns None on any failure so the caller
 /// falls back to the filesystem scan. 12s timeout.
 async fn list_codex_plugins_via_cli() -> Option<Vec<InstalledPlugin>> {
-    let path = crate::agent::claude_stream::which_binary("codex")?;
+    let path = crate::agent::claude_stream::which_binary("mofu")?;
     let aug_path = crate::agent::claude_stream::augmented_path();
     use crate::process_ext::HideConsole;
     use tokio::process::Command as TokioCommand;
@@ -365,6 +365,12 @@ pub fn toggle_codex_plugin(plugin_id: String, enabled: bool) -> Result<(), Strin
 pub fn list_codex_skills(cwd: Option<String>) -> Result<Vec<StandaloneSkill>, String> {
     log::debug!("[plugins] list_codex_skills: cwd={:?}", cwd);
     Ok(crate::storage::plugins::list_codex_skills(cwd.as_deref()))
+}
+
+#[tauri::command]
+pub fn list_mofu_skills(cwd: Option<String>) -> Result<Vec<StandaloneSkill>, String> {
+    log::debug!("[plugins] list_mofu_skills: cwd={:?}", cwd);
+    Ok(crate::storage::plugins::list_mofu_skills(cwd.as_deref()))
 }
 
 #[tauri::command]

@@ -49,14 +49,7 @@
 
   // ── Tab state ──
   type SettingsTab = "general" | "connection" | "cli-config" | "shortcuts" | "remote" | "debug";
-  const VALID_TABS: SettingsTab[] = [
-    "general",
-    "connection",
-    "cli-config",
-    "shortcuts",
-    "remote",
-    "debug",
-  ];
+  const VALID_TABS: SettingsTab[] = ["general", "connection", "shortcuts", "debug"];
   const urlTab = $page.url.searchParams.get("tab");
   const initialTab: SettingsTab = VALID_TABS.includes(urlTab as SettingsTab)
     ? (urlTab as SettingsTab)
@@ -82,16 +75,8 @@
       icon: "M12 2a4 4 0 0 0-4 4c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2 4 4 0 0 0-4-4z M8 8v2a4 4 0 0 0 8 0V8 M12 14v4 M8 18h8",
     },
     {
-      id: "cli-config",
-      icon: "M4 17l6-6-6-6 M12 19h8",
-    },
-    {
       id: "shortcuts",
       icon: "M10 8h.01 M12 12h.01 M14 8h.01 M16 12h.01 M18 8h.01 M6 8h.01 M7 16h10 M8 12h.01 M2 4h20v16H2z",
-    },
-    {
-      id: "remote",
-      icon: "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",
     },
     { id: "debug", icon: "m18 16 4-4-4-4 M6 8l-4 4 4 4 M14.5 4l-5 16" },
   ];
@@ -659,10 +644,13 @@
   let codexProviderKey = $state("");
   let codexProviderModel = $state("");
   let codexProviderBaseUrl = $state(""); // editable for "custom"
+  let codexProviderSaving = $state(false);
+  let codexProviderSaved = $state(false);
+  let codexProviderError = $state("");
   // Auth Mode toggle, mirroring Claude: "cli" = codex login (provider None),
   // "app" = app points Codex at a third-party Responses provider. Explicit
   // state (not derived) so "app" can be selected before a preset is picked.
-  let codexAuthMode = $state<"cli" | "app">("cli");
+  let codexAuthMode = $state<"cli" | "app">("app");
 
   // Initialize the draft from the saved provider once settings load.
   let codexProviderInitDone = false;
@@ -679,13 +667,6 @@
     }
   });
 
-  function setCodexAuthMode(mode: "cli" | "app") {
-    codexAuthMode = mode;
-    // CLI Auth clears any app-managed provider (back to codex login default),
-    // mirroring Claude's CLI-Auth toggle which clears platform/base_url config.
-    if (mode === "cli") selectCodexProvider(null);
-  }
-
   function selectCodexProvider(preset: CodexProviderPreset | null) {
     if (!preset) {
       codexProviderId = "";
@@ -698,26 +679,58 @@
     if (preset.keyless) codexProviderKey = "";
   }
 
+  function normalizeOpenAiBaseUrl(url: string): string {
+    const trimmed = url.trim().replace(/\/+$/, "");
+    if (!trimmed) return trimmed;
+    return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
+  }
+
   async function saveCodexProvider(clear?: null) {
+    codexProviderSaving = true;
+    codexProviderSaved = false;
+    codexProviderError = "";
     if (clear === null || !codexProviderId) {
-      settings = await api.updateUserSettings({ codex_provider: null } as Partial<UserSettings>);
+      try {
+        settings = await api.updateUserSettings({ codex_provider: null } as Partial<UserSettings>);
+        codexProviderSaved = true;
+        setTimeout(() => (codexProviderSaved = false), 1800);
+      } catch (e) {
+        codexProviderError = String(e);
+      } finally {
+        codexProviderSaving = false;
+      }
       return;
     }
     const preset = CODEX_PROVIDER_PRESETS.find((p) => p.id === codexProviderId);
-    if (!preset) return;
+    if (!preset) {
+      codexProviderSaving = false;
+      return;
+    }
     const cred: CodexProviderCredential = {
       id: preset.id,
       name: preset.name,
-      base_url: codexProviderBaseUrl.trim() || preset.base_url,
+      base_url: normalizeOpenAiBaseUrl(codexProviderBaseUrl || preset.base_url),
       env_key: preset.env_key,
       wire_api: "responses",
       model: codexProviderModel.trim(),
       api_key: preset.keyless ? undefined : codexProviderKey.trim() || undefined,
     };
-    settings = await api.updateUserSettings({
-      codex_provider: cred,
-    } as Partial<UserSettings>);
-    dbg("settings", "codex provider saved", { id: cred.id });
+    try {
+      settings = await api.updateUserSettings({
+        codex_provider: cred,
+        default_model: cred.model,
+      } as Partial<UserSettings>);
+      codexProviderSaved = true;
+      setTimeout(() => (codexProviderSaved = false), 1800);
+      window.dispatchEvent(
+        new CustomEvent("mofu:provider-saved", { detail: { model: cred.model } }),
+      );
+      dbg("settings", "codex provider saved", { id: cred.id, model: cred.model });
+    } catch (e) {
+      codexProviderError = String(e);
+    } finally {
+      codexProviderSaving = false;
+    }
   }
 
   let codexProviderPreset = $derived(
@@ -1774,18 +1787,10 @@
                 {t("settings_general_defaultAgentDesc")}
               </p>
             </div>
-            <div class="flex gap-1.5">
-              {#each ["claude", "codex"] as ag (ag)}
-                <button
-                  class="rounded-md border px-3 py-1.5 text-xs capitalize transition-all duration-150
-                  {(settings?.default_agent ?? 'claude') === ag
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'}"
-                  onclick={() => saveGeneralPatch({ default_agent: ag })}
-                >
-                  {ag}
-                </button>
-              {/each}
+            <div
+              class="rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+            >
+              Mofu CLI
             </div>
           </div>
         </Card>
@@ -2309,8 +2314,8 @@
       <!-- ═══ Connection tab ═══ -->
     {:else if activeTab === "connection"}
       <div class="space-y-6">
-        <!-- Claude authentication -->
-        <Card class="p-6 space-y-5">
+        <!-- Upstream Claude/API provider controls are not part of Mofu App. -->
+        <Card class="hidden">
           <div class="flex items-center justify-between">
             <h2 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               {t("settings_connection_claudeTitle")}
@@ -3038,7 +3043,7 @@
           {/if}
         </Card>
 
-        <!-- Codex Status -->
+        <!-- Mofu CLI Status -->
         <Card class="p-6 space-y-4">
           <div class="flex items-center justify-between">
             <h2 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -3084,7 +3089,7 @@
               <div>
                 <p class="text-sm font-medium">{t("settings_codex_notInstalled")}</p>
                 <p class="text-xs text-muted-foreground">
-                  {t("settings_codex_installHint", { command: "npm i -g @openai/codex" })}
+                  {t("settings_codex_installHint", { command: "mofu" })}
                 </p>
               </div>
             </div>
@@ -3140,7 +3145,7 @@
                         codexDoctor.overallStatus,
                       )}">{codexDoctor.overallStatus}</span
                     >
-                    <span class="text-muted-foreground">codex v{codexDoctor.codexVersion}</span>
+                    <span class="text-muted-foreground">mofu v{codexDoctor.codexVersion}</span>
                   </div>
                   <ul class="mt-2 space-y-1.5">
                     {#each codexDoctorChecks as check (check.id)}
@@ -3163,79 +3168,11 @@
                 {/if}
               </div>
 
-              <!-- Auth Mode selector: 2-way radio, mirroring Claude -->
-              <div>
-                <span class="text-sm font-medium mb-2 block">{t("settings_auth_modeLabel")}</span>
-                <div class="mt-1 grid grid-cols-2 gap-3">
-                  <button
-                    class="flex flex-col items-center gap-2 rounded-lg border p-4 text-sm transition-all duration-150
-                    {codexAuthMode === 'cli'
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                      : 'hover:bg-accent hover:border-ring/30'}"
-                    onclick={() => setCodexAuthMode("cli")}
-                  >
-                    <div
-                      class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10"
-                    >
-                      <svg
-                        class="h-5 w-5 text-emerald-400"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path
-                          d="M7 11V7a5 5 0 0 1 10 0v4"
-                        />
-                      </svg>
-                    </div>
-                    <span class="font-medium">{t("auth_cliAuth")}</span>
-                    <span class="text-[10px] text-muted-foreground text-center"
-                      >{t("settings_codex_authModeCliDesc")}</span
-                    >
-                  </button>
-                  <button
-                    class="flex flex-col items-center gap-2 rounded-lg border p-4 text-sm transition-all duration-150
-                    {codexAuthMode === 'app'
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                      : 'hover:bg-accent hover:border-ring/30'}"
-                    onclick={() => setCodexAuthMode("app")}
-                  >
-                    <div
-                      class="flex h-10 w-10 items-center justify-center rounded-full bg-violet-500/10"
-                    >
-                      <svg
-                        class="h-5 w-5 text-violet-400"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2" /><rect
-                          x="2"
-                          y="14"
-                          width="20"
-                          height="8"
-                          rx="2"
-                          ry="2"
-                        /><line x1="6" y1="6" x2="6.01" y2="6" /><line
-                          x1="6"
-                          y1="18"
-                          x2="6.01"
-                          y2="18"
-                        />
-                      </svg>
-                    </div>
-                    <span class="font-medium">{t("settings_codex_authModeProviderLabel")}</span>
-                    <span class="text-[10px] text-muted-foreground text-center"
-                      >{t("settings_codex_authModeProviderDesc")}</span
-                    >
-                  </button>
-                </div>
+              <div class="rounded-lg border border-border/50 bg-primary/5 p-4">
+                <p class="text-sm font-medium">LM Studio Provider</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  {t("settings_codex_authModeProviderDesc")}
+                </p>
               </div>
 
               <!-- CLI Auth details (codex login owns auth in this mode) -->
@@ -3420,11 +3357,24 @@
                       <div class="flex justify-end">
                         <button
                           class="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                          disabled={codexProviderSaving}
                           onclick={() => saveCodexProvider()}
                         >
-                          {t("settings_codexProvider_save")}
+                          {codexProviderSaving
+                            ? t("common_loading")
+                            : t("settings_codexProvider_save")}
                         </button>
                       </div>
+                      {#if codexProviderSaved}
+                        <p class="text-xs text-emerald-600 dark:text-emerald-400">
+                          {t("settings_general_saved")}
+                        </p>
+                      {/if}
+                      {#if codexProviderError}
+                        <p class="text-xs text-red-600 dark:text-red-400">
+                          {codexProviderError}
+                        </p>
+                      {/if}
                     </div>
                   {/if}
                 </div>

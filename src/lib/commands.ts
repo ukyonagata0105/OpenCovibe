@@ -163,15 +163,6 @@ export const commands: CommandDef[] = [
     action: "navigate",
     payload: "/memory",
   },
-  {
-    id: "go-usage",
-    name: "Go to Usage",
-    description: "Navigate to usage statistics",
-    category: "navigation",
-    agent: "both",
-    action: "navigate",
-    payload: "/usage",
-  },
   // Codex disabled
   // {
   //   id: "go-codex-config",

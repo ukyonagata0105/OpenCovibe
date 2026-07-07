@@ -16,6 +16,7 @@ export interface LocaleEntry {
 }
 
 export const LOCALE_REGISTRY = [
+  { code: "ja", nativeName: "日本語", shortLabel: "日", dir: "ltr", status: "stable" },
   { code: "en", nativeName: "English", shortLabel: "EN", dir: "ltr", status: "stable" },
   {
     code: "zh-CN",

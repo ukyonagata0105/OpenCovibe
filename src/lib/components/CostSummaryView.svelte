@@ -134,24 +134,5 @@
         </div>
       </div>
     {/if}
-
-    <!-- Link to usage page -->
-    <div class="mt-3 pt-2 border-t border-border/20">
-      <button
-        class="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
-        onclick={() => goto("/usage")}
-      >
-        {t("cost_viewDetailed")}
-        <svg
-          class="h-3 w-3"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg
-        >
-      </button>
-    </div>
   </div>
 {/if}

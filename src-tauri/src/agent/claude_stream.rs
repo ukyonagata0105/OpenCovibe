@@ -659,8 +659,8 @@ pub fn invalidate_claude_path_cache() {
 /// Shared cache for the resolved codex binary path.
 static CODEX_PATH_CACHE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
-/// Resolve the full path to the codex binary — mirror of `resolve_claude_path` for Codex.
-/// On Windows the npm-installed binary is `codex.cmd`; spawning the bare name `codex` ENOENTs
+/// Resolve the full path to the mofu binary — mirror of `resolve_claude_path` for Mofu.
+/// On Windows the npm-installed binary may be `mofu.cmd`; spawning the bare name `mofu` ENOENTs
 /// (std only auto-appends `.exe`), so we resolve an explicit path from npm global dirs first,
 /// then fall back to a PATH lookup. Cached; clear with `invalidate_codex_path_cache()`.
 pub(crate) fn resolve_codex_path() -> String {
@@ -686,10 +686,10 @@ pub(crate) fn resolve_codex_path() -> String {
             }
         }
         if let Some(ref h) = home {
-            bases.push(h.join(".codex").join("bin"));
+            bases.push(h.join(".mofumofu").join("bin"));
             bases.push(h.join(".local").join("bin"));
         }
-        let names = ["codex.cmd", "codex.exe", "codex.bat", "codex"];
+        let names = ["mofu.cmd", "mofu.exe", "mofu.bat", "mofu"];
         let mut cands = Vec::new();
         for base in &bases {
             for name in &names {
@@ -702,10 +702,14 @@ pub(crate) fn resolve_codex_path() -> String {
     let candidates = {
         let mut cands = Vec::new();
         if let Some(ref h) = home {
-            cands.push(h.join(".codex").join("bin").join("codex"));
-            cands.push(h.join(".local").join("bin").join("codex"));
+            cands.push(h.join(".mofumofu").join("bin").join("mofu"));
+            cands.push(h.join(".local").join("bin").join("mofu"));
         }
-        cands.push(PathBuf::from("/usr/local/bin/codex"));
+        cands.push(PathBuf::from(
+            "/Applications/Mofu App.app/Contents/Resources/bin/mofu",
+        ));
+        cands.push(PathBuf::from("/opt/homebrew/bin/mofu"));
+        cands.push(PathBuf::from("/usr/local/bin/mofu"));
         cands
     };
 
@@ -713,17 +717,15 @@ pub(crate) fn resolve_codex_path() -> String {
         if c.exists() {
             let path_str = c.to_string_lossy().to_string();
             log::debug!(
-                "[claude_stream] resolved codex binary (cached): {}",
+                "[claude_stream] resolved mofu binary (cached): {}",
                 path_str
             );
             *cached = Some(path_str.clone());
             return path_str;
         }
     }
-    log::debug!(
-        "[claude_stream] codex binary not found in candidates, falling back to PATH lookup"
-    );
-    let fallback = which_binary("codex").unwrap_or_else(|| "codex".to_string());
+    log::debug!("[claude_stream] mofu binary not found in candidates, falling back to PATH lookup");
+    let fallback = which_binary("mofu").unwrap_or_else(|| "mofu".to_string());
     *cached = Some(fallback.clone());
     fallback
 }

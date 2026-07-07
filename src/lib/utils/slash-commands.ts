@@ -86,13 +86,6 @@ export const VIRTUAL_COMMANDS: CliCommand[] = [
     _navigate: "/settings?tab=cli-config",
   },
   {
-    name: "stats",
-    description: "View usage stats, heatmap, and model breakdown",
-    aliases: ["usage"],
-    _virtual: true,
-    _navigate: "/usage",
-  },
-  {
     name: "copy",
     description: "Copy Claude's last response to clipboard as markdown",
     aliases: [],

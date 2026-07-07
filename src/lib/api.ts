@@ -525,6 +525,13 @@ export async function getCodexModels(forceRefresh?: boolean): Promise<CodexModel
   return list;
 }
 
+export async function getCodexProviderModels(): Promise<CodexModelList> {
+  dbg("api", "getCodexProviderModels");
+  const list = await invoke<CodexModelList>("list_codex_provider_models");
+  dbg("api", "getCodexProviderModels →", { models: list.models.length });
+  return list;
+}
+
 // Session (event bus)
 export async function startSession(
   runId: string,
@@ -1055,6 +1062,11 @@ export async function deleteSkill(path: string, cwd?: string): Promise<void> {
 export async function listCodexSkills(cwd?: string): Promise<StandaloneSkill[]> {
   dbg("api", "listCodexSkills", { cwd });
   return invoke<StandaloneSkill[]>("list_codex_skills", { cwd: cwd ?? null });
+}
+
+export async function listMofuSkills(cwd?: string): Promise<StandaloneSkill[]> {
+  dbg("api", "listMofuSkills", { cwd });
+  return invoke<StandaloneSkill[]>("list_mofu_skills", { cwd: cwd ?? null });
 }
 
 export async function createCodexSkill(

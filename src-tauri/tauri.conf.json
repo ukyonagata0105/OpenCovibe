@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/.github/schemas/tauri-v2.json",
-  "productName": "OpenCovibe",
+  "productName": "Mofu App",
   "version": "0.2.5",
-  "identifier": "com.opencovibe.desktop",
+  "identifier": "app.mofumofu.desktop",
   "build": {
     "frontendDist": "../build",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "OpenCovibe",
+        "title": "Mofu App",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
@@ -38,8 +38,8 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "AI-assisted vibe coding desktop app",
-    "longDescription": "OpenCovibe wraps AI coding CLIs (Claude Code, Codex) with a visual chat interface, run management, and activity monitoring. Local-first, no cloud required.",
+    "shortDescription": "Mofumofu desktop app",
+    "longDescription": "Mofu App wraps the Mofumofu CLI with a visual chat interface, run management, and activity monitoring. Local-first, no cloud required.",
     "macOS": {
       "entitlements": "entitlements.plist",
       "minimumSystemVersion": "13.0"
