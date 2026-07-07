@@ -499,7 +499,17 @@ impl SessionProtocol for CodexAppServer {
         // thread/start|resume ack. It carries `result.thread.id` for new threads — capture it
         // here so `thread_id` is set BEFORE we mark Ready (otherwise frame_user_turn fires with
         // no thread id and silently drops the first turn). thread/started also sets Ready.
-        if msg.get("id").and_then(|v| v.as_i64()) == Some(2) && msg.get("error").is_none() {
+        if msg.get("id").and_then(|v| v.as_i64()) == Some(2) {
+            if let Some(error) = msg.get("error") {
+                let message = error
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("thread/start or thread/resume failed");
+                out.lifecycle = Some(LifecycleSignal::SessionFailed(Some(format!(
+                    "Mofu CLI failed to open thread: {message}"
+                ))));
+                return out;
+            }
             if self.thread_id.is_none() {
                 if let Some(id) = msg
                     .get("result")
@@ -2650,6 +2660,22 @@ mod tests {
         // frame_user_turn now has a thread id and emits turn/start (not dropped).
         let msgs = s.frame_user_turn("hi", &[], no_skills(), &no_overrides());
         assert_eq!(msgs[0]["params"]["threadId"], "th-ack");
+    }
+
+    #[test]
+    fn thread_open_error_surfaces_session_failure() {
+        let mut s = CodexAppServer::new();
+        let out = s.parse_line(
+            "r",
+            r#"{"id":2,"error":{"code":-32600,"message":"no rollout found for thread id th-missing"}}"#,
+        );
+        assert!(!s.is_ready());
+        assert_eq!(
+            out.lifecycle,
+            Some(LifecycleSignal::SessionFailed(Some(
+                "Mofu CLI failed to open thread: no rollout found for thread id th-missing".into()
+            )))
+        );
     }
 
     #[test]

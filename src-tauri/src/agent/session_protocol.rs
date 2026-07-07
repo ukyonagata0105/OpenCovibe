@@ -87,6 +87,7 @@ pub enum LifecycleSignal {
     TurnStarted,
     TurnCompleted,
     TurnFailed(Option<String>),
+    SessionFailed(Option<String>),
 }
 
 /// Result of parsing one line of child stdout.

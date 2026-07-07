@@ -1922,6 +1922,13 @@ impl SessionActor {
                     self.persist_idle_running(RunStatus::Idle);
                     self.end_turn_and_dispatch().await;
                 }
+                LifecycleSignal::SessionFailed(err) => {
+                    self.fail_all_pending_replies(
+                        err.as_deref()
+                            .unwrap_or("Mofu CLI session failed before the turn started"),
+                    );
+                    self.emit_state("failed", None, err, true);
+                }
             }
         }
     }

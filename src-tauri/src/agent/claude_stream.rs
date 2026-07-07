@@ -137,6 +137,7 @@ fn extra_path_dirs() -> Vec<PathBuf> {
         }
 
         dirs.extend([
+            home.join(".mofumofu").join("bin"),
             home.join(".bun").join("bin"),
             home.join(".volta").join("bin"),
             home.join(".fnm").join("current").join("bin"),

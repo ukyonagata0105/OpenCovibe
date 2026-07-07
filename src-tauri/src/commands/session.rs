@@ -9,6 +9,7 @@ use crate::models::{BusEvent, RemoteHost, RunMeta, RunStatus, SessionMode, UserS
 use crate::process_ext::HideConsole;
 use crate::storage;
 use crate::web_server::broadcaster::BroadcastEmitter;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::State;
 use tokio_util::sync::CancellationToken;
@@ -92,6 +93,82 @@ fn resolve_remote_host(meta: &RunMeta) -> Result<Option<RemoteHost>, String> {
                 .ok_or_else(|| format!("Remote host '{}' not found in settings", name))
         }
         None => Ok(None),
+    }
+}
+
+fn find_rollout_by_thread_id(root: &Path, thread_id: &str) -> Option<PathBuf> {
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let entries = std::fs::read_dir(&dir).ok()?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let file_type = entry.file_type().ok()?;
+            if file_type.is_dir() {
+                stack.push(path);
+            } else if file_type.is_file()
+                && path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|name| name.contains(thread_id) && name.ends_with(".jsonl"))
+            {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn ensure_mofu_rollout_for_resume(thread_id: &str) {
+    let Some(home) = storage::home_dir().map(PathBuf::from) else {
+        return;
+    };
+    let mofu_home = home.join(".mofumofu").join("codex-home");
+    let mofu_sessions = mofu_home.join("sessions");
+    if find_rollout_by_thread_id(&mofu_sessions, thread_id).is_some() {
+        return;
+    }
+
+    let legacy_home = home.join(".codex");
+    let search_roots = [
+        legacy_home.join("sessions"),
+        legacy_home.join("archived_sessions"),
+    ];
+    let Some(source) = search_roots
+        .iter()
+        .find_map(|root| find_rollout_by_thread_id(root, thread_id))
+    else {
+        log::warn!(
+            "[session] Mofu resume rollout missing and no legacy Codex rollout found for thread_id={thread_id}"
+        );
+        return;
+    };
+
+    let relative = source
+        .strip_prefix(&legacy_home)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|_| {
+            PathBuf::from("sessions").join(
+                source
+                    .file_name()
+                    .unwrap_or_else(|| std::ffi::OsStr::new("rollout.jsonl")),
+            )
+        });
+    let target = mofu_home.join(relative);
+    if let Some(parent) = target.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            log::warn!("[session] failed to create Mofu rollout parent: {e}");
+            return;
+        }
+    }
+    match std::fs::copy(&source, &target) {
+        Ok(_) => log::info!(
+            "[session] migrated legacy Codex rollout for Mofu resume: {} -> {}",
+            source.display(),
+            target.display()
+        ),
+        Err(e) => log::warn!(
+            "[session] failed to migrate legacy Codex rollout for thread_id={thread_id}: {e}"
+        ),
     }
 }
 
@@ -678,6 +755,9 @@ pub(crate) async fn start_session_impl(
             ConversationRef::CodexThread(t) => Some(t),
             _ => None,
         });
+        if let Some(tid) = &resume_tid {
+            ensure_mofu_rollout_for_resume(tid);
+        }
         let mut driver = CodexAppServer::new();
         let ctx = StartupCtx {
             cwd: effective_cwd.to_string(),
