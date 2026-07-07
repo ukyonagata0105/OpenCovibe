@@ -1286,9 +1286,9 @@
       <div
         class="flex w-[44px] flex-col items-center border-r border-sidebar-border bg-black/[0.03] dark:bg-black/20"
       >
-        <!-- Rail logo (OC) -->
+        <!-- Rail logo -->
         <div class="flex h-14 w-full items-center justify-center border-b border-sidebar-border">
-          <img src="/logo.png?v=2" alt="OC" class="h-8 w-8 rounded-lg" />
+          <img src="/logo.png?v=3" alt="Mofu App" class="h-8 w-8 rounded-lg" />
         </div>
 
         <!-- Rail nav icons -->
