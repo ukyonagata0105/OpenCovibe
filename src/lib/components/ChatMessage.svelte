@@ -20,7 +20,7 @@
     agent?: string;
   } = $props();
 
-  const assistantLabel = $derived(agent === "codex" ? "Codex" : t("chat_roleClaude"));
+  const assistantLabel = $derived(agent === "codex" ? "Mofu CLI" : t("chat_roleClaude"));
   const isCodex = $derived(agent === "codex");
 
   function isImage(att: Attachment): boolean {

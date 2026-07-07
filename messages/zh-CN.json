@@ -887,7 +887,7 @@
 
   "nav_history": "历史",
   "history_title": "历史",
-  "history_subtitle": "浏览和搜索你的 AI 编码会话",
+  "history_subtitle": "浏览和搜索你的 Mofu 编码会话",
   "history_searchPlaceholder": "搜索会话...",
   "history_filters": "筛选",
   "history_filtersHide": "隐藏筛选",
@@ -916,7 +916,7 @@
   "history_loadMore": "加载更多",
   "history_clearFilters": "清除所有筛选",
   "history_noResults": "没有匹配的会话",
-  "history_totalCost": "总费用（仅含 OpenCovibe 原生及已导入的 CLI 会话）",
+  "history_totalCost": "总费用（仅含 Mofu App 运行及已导入的 Mofu CLI 会话）",
   "history_runsMatching": "{count} 个匹配的会话",
   "history_turns": "{count} 轮",
   "history_files": "{count} 个文件",

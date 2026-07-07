@@ -887,7 +887,7 @@
 
   "nav_history": "History",
   "history_title": "History",
-  "history_subtitle": "Browse and search your AI coding sessions",
+  "history_subtitle": "Browse and search your Mofu coding sessions",
   "history_searchPlaceholder": "Search sessions...",
   "history_filters": "Filters",
   "history_filtersHide": "Hide Filters",
@@ -916,7 +916,7 @@
   "history_loadMore": "Load More",
   "history_clearFilters": "Clear all filters",
   "history_noResults": "No sessions match your filters",
-  "history_totalCost": "total cost (OpenCovibe runs & imported CLI sessions only)",
+  "history_totalCost": "total cost (Mofu App runs & imported Mofu CLI sessions only)",
   "history_runsMatching": "{count} runs matching",
   "history_turns": "{count} turns",
   "history_files": "{count} files",
