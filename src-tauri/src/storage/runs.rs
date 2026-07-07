@@ -552,5 +552,8 @@ pub fn soft_delete_runs(ids: &[String]) -> Result<u32, String> {
     }
 
     log::debug!("[storage/runs] soft_delete_runs: deleted {} runs", count);
+    if count > 0 {
+        super::run_index::invalidate_cache();
+    }
     Ok(count)
 }
