@@ -399,6 +399,26 @@
       : "",
   );
 
+  function lineCountLabel(n: number): string {
+    return t("tool_linesCount", { count: String(n) });
+  }
+
+  function fileCountLabel(n: number): string {
+    return t("tool_filesCount", { count: String(n) });
+  }
+
+  function matchCountLabel(n: number): string {
+    return t("tool_matchesCount", { count: String(n) });
+  }
+
+  function resultCountLabel(n: number): string {
+    return t("tool_resultsCount", { count: String(n) });
+  }
+
+  function itemCountLabel(n: number): string {
+    return t("tool_itemsCount", { count: String(n) });
+  }
+
   // Output size label (shown when tool is complete)
   let outputSizeLabel = $derived.by(() => {
     if (tool.status !== "success" && tool.status !== "error") return "";
@@ -408,22 +428,21 @@
       const fileResult = tur.file as { numLines?: number; totalLines?: number } | undefined;
       if (fileResult?.totalLines != null) {
         if (fileResult.numLines != null && fileResult.numLines < fileResult.totalLines) {
-          return `${fileResult.numLines}/${fileResult.totalLines} lines`;
+          return `${fileResult.numLines}/${lineCountLabel(fileResult.totalLines)}`;
         }
-        return `${fileResult.totalLines} lines`;
+        return lineCountLabel(fileResult.totalLines);
       }
       // Glob: file count
       if ("filenames" in tur && "numFiles" in tur && !("mode" in tur)) {
         const n = tur.numFiles as number;
-        return `${n} file${n !== 1 ? "s" : ""}`;
+        return fileCountLabel(n);
       }
       // Grep: file + match counts
       if ("numFiles" in tur && "mode" in tur) {
         const nf = tur.numFiles as number;
         const nl = tur.numLines as number | undefined;
-        if (nl != null)
-          return `${nf} file${nf !== 1 ? "s" : ""}, ${nl} match${nl !== 1 ? "es" : ""}`;
-        return `${nf} file${nf !== 1 ? "s" : ""}`;
+        if (nl != null) return `${fileCountLabel(nf)}, ${matchCountLabel(nl)}`;
+        return fileCountLabel(nf);
       }
       // Edit: patch line count
       if ("structuredPatch" in tur) {
@@ -447,7 +466,7 @@
       }
       // Bash: interrupted indicator
       if ("interrupted" in tur && (tur.interrupted as boolean)) {
-        return "interrupted";
+        return t("tool_interrupted");
       }
       // WebFetch: HTTP status + response size
       if ("code" in tur && "bytes" in tur && "codeText" in tur) {
@@ -459,25 +478,25 @@
       // WebSearch: result count
       if ("results" in tur && Array.isArray(tur.results)) {
         const count = (tur.results as unknown[]).filter((r) => typeof r !== "string").length;
-        return `${count} result${count !== 1 ? "s" : ""}`;
+        return resultCountLabel(count);
       }
       // Task (subagent): usage stats or async
       if ("totalToolUseCount" in tur) {
         const tools = tur.totalToolUseCount as number;
         const ms = tur.totalDurationMs as number | undefined;
         const tokens = tur.totalTokens as number | undefined;
-        const parts: string[] = [`${tools} tools`];
+        const parts: string[] = [t("inline_toolCount", { count: String(tools) })];
         if (ms != null) parts.push(formatDuration(ms));
-        if (tokens != null) parts.push(`${formatTokenCount(tokens)} tok`);
+        if (tokens != null) parts.push(t("tool_tokensShort", { count: formatTokenCount(tokens) }));
         return parts.join(" \u00b7 ");
       }
       if ((tur as Record<string, unknown>).status === "async_launched") {
-        return "async";
+        return t("tool_async");
       }
       // TodoWrite: item count
       if ("newTodos" in tur) {
         const n = (tur.newTodos as unknown[]).length;
-        return `${n} item${n !== 1 ? "s" : ""}`;
+        return itemCountLabel(n);
       }
     }
     // Fallback: count output lines
@@ -485,7 +504,7 @@
     if (!output) return "";
     const lines = output.split("\n").length;
     if (lines <= 1) return "";
-    return `${lines} lines`;
+    return lineCountLabel(lines);
   });
 
   function multiCount(): number {
@@ -1630,7 +1649,7 @@
           {#if subToolCount > 0}
             <span class="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">
               {#if tool.status === "running"}
-                {subToolCompleted}/{subToolCount} tools
+                {subToolCompleted}/{t("inline_toolCount", { count: String(subToolCount) })}
               {:else}
                 {t("inline_toolCount", { count: String(subToolCount) })}
               {/if}
@@ -1651,7 +1670,7 @@
           {#if subToolCount > 0}
             <span class="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">
               {#if tool.status === "running"}
-                {subToolCompleted}/{subToolCount} tools
+                {subToolCompleted}/{t("inline_toolCount", { count: String(subToolCount) })}
               {:else}
                 {t("inline_toolCount", { count: String(subToolCount) })}
               {/if}
@@ -1676,7 +1695,7 @@
           {#if subToolCount > 0}
             <span class="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">
               {#if tool.status === "running"}
-                {subToolCompleted}/{subToolCount} tools
+                {subToolCompleted}/{t("inline_toolCount", { count: String(subToolCount) })}
               {:else}
                 {t("inline_toolCount", { count: String(subToolCount) })}
               {/if}

@@ -2,6 +2,7 @@
   import { renderMarkdown } from "$lib/utils/markdown";
   import { readFileBase64 } from "$lib/api";
   import { dbg, dbgWarn } from "$lib/utils/debug";
+  import { t } from "$lib/i18n/index.svelte";
   import { onDestroy } from "svelte";
 
   let {
@@ -126,15 +127,16 @@
     const cleanups: Array<() => void> = [];
 
     buttons.forEach((btn) => {
+      btn.textContent = t("common_copy");
       const handler = async () => {
         const codeEl = btn.closest(".code-block")?.querySelector("pre code");
         if (!codeEl) return;
         try {
           await navigator.clipboard.writeText(codeEl.textContent || "");
-          btn.textContent = "Copied!";
+          btn.textContent = t("common_copied");
           btn.classList.add("copied");
           setTimeout(() => {
-            btn.textContent = "Copy";
+            btn.textContent = t("common_copy");
             btn.classList.remove("copied");
           }, 1500);
         } catch {

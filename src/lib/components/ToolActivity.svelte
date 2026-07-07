@@ -819,7 +819,9 @@
                     </div>
                     {#if usage && (usage.tool_uses || usage.total_tokens || usage.duration_ms)}
                       <div class="mt-0.5 text-[10px] text-muted-foreground/60 pl-5">
-                        {#if usage.tool_uses}{usage.tool_uses} tools{/if}
+                        {#if usage.tool_uses}{t("inline_toolCount", {
+                            count: String(usage.tool_uses),
+                          })}{/if}
                         {#if usage.tool_uses && usage.duration_ms}
                           ·
                         {/if}
@@ -827,7 +829,9 @@
                         {#if (usage.tool_uses || usage.duration_ms) && usage.total_tokens}
                           ·
                         {/if}
-                        {#if usage.total_tokens}{formatTokenCount(usage.total_tokens)} tok{/if}
+                        {#if usage.total_tokens}{t("tool_tokensShort", {
+                            count: formatTokenCount(usage.total_tokens),
+                          })}{/if}
                       </div>
                     {/if}
                   </button>
@@ -929,7 +933,9 @@
                     {/if}
                     {#if sa.toolCount > 0 || sa.durationMs != null}
                       <div class="text-[10px] text-muted-foreground/60 mt-0.5">
-                        {#if sa.toolCount > 0}{sa.toolCount} tools{/if}
+                        {#if sa.toolCount > 0}{t("inline_toolCount", {
+                            count: String(sa.toolCount),
+                          })}{/if}
                         {#if sa.toolCount > 0 && sa.durationMs != null}
                           ·
                         {/if}

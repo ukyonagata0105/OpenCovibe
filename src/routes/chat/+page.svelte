@@ -73,7 +73,7 @@
   import { parseContextMarkdown } from "$lib/utils/context-parser";
   import type { ContextSnapshot } from "$lib/types";
   import ReleaseNotesCard from "$lib/components/ReleaseNotesCard.svelte";
-  import { t } from "$lib/i18n/index.svelte";
+  import { currentLocale, t } from "$lib/i18n/index.svelte";
   import { dbg, dbgWarn } from "$lib/utils/debug";
   import { yieldToMain } from "$lib/utils/yield";
   import {
@@ -125,6 +125,16 @@
   function codexDisplayModel(model?: string): string {
     if (!model) return "";
     return /claude|opus|sonnet|haiku/i.test(model) ? "" : model;
+  }
+
+  function currentMofuModel(): string {
+    return (
+      codexDisplayModel(store.model) ||
+      settings?.codex_provider?.model?.trim() ||
+      codexDisplayModel(store.run?.model) ||
+      settings?.default_model?.trim() ||
+      ""
+    );
   }
 
   // ── Layout context ──
@@ -673,10 +683,7 @@
       endedAt: store.run.ended_at ?? null,
       lastTurnDurationMs: store.durationMs,
       tokensEstimated: !store.usage.modelUsage || Object.keys(store.usage.modelUsage).length === 0,
-      model:
-        effectiveAgent === "codex"
-          ? codexDisplayModel(store.run.model)
-          : (store.run.model ?? store.model),
+      model: effectiveAgent === "codex" ? currentMofuModel() : (store.run.model ?? store.model),
       agent: store.run.agent ?? store.agent,
       cliVersion: effectiveAgent === "codex" ? (getCodexVersion() ?? "") : store.cliVersion,
       permissionMode: store.permissionMode,
@@ -1170,7 +1177,7 @@
   // ── Thinking timer + panel ──
   let thinkingElapsed = $state(0);
   let thinkingExpanded = $state(true);
-  let spinnerVerb = $state(randomSpinnerVerb());
+  let spinnerVerb = $state(randomSpinnerVerb(currentLocale()));
   /** Plain flag (not $state) — avoids $effect dependency cycle with thinkingElapsed. */
   let thinkingVerbPicked = false;
   /** Debounced visibility — prevents spinner flash on fast CLI commands (/context, /cost). */
@@ -1206,7 +1213,7 @@
       // survives session switches without resetting to 0.
       const base = store.thinkingStartMs || Date.now();
       if (!thinkingVerbPicked) {
-        spinnerVerb = randomSpinnerVerb();
+        spinnerVerb = randomSpinnerVerb(currentLocale());
         thinkingVerbPicked = true;
       }
       // Debounce: only show spinner after 300ms to avoid flash on fast commands
@@ -4551,13 +4558,7 @@
       running={store.sessionAlive}
       run={store.run}
       agent={store.run?.agent ?? store.agent}
-      model={effectiveAgent === "codex"
-        ? codexDisplayModel(store.run?.model) ||
-          codexDisplayModel(store.model) ||
-          settings?.codex_provider?.model ||
-          settings?.default_model ||
-          ""
-        : store.model}
+      model={effectiveAgent === "codex" ? currentMofuModel() : store.model}
       cost={store.usage.cost}
       inputTokens={cumulativeTokens.input}
       outputTokens={cumulativeTokens.output}
@@ -5395,7 +5396,9 @@
                           >
                           {#if store.thinkingEndMs && store.thinkingDurationSec > 0}
                             <span class="text-xs tabular-nums"
-                              >· thought for {store.thinkingDurationSec}s</span
+                              >· {t("chat_thoughtFor", {
+                                seconds: String(store.thinkingDurationSec),
+                              })}</span
                             >
                           {/if}
                         </div>
@@ -5419,7 +5422,9 @@
                           <span class="spinner-shimmer">{spinnerVerb}…</span>
                           {#if store.thinkingEndMs && store.thinkingDurationSec > 0}
                             <span class="text-muted-foreground text-xs tabular-nums"
-                              >· thought for {store.thinkingDurationSec}s</span
+                              >· {t("chat_thoughtFor", {
+                                seconds: String(store.thinkingDurationSec),
+                              })}</span
                             >
                           {/if}
                         </div>

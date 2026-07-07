@@ -571,7 +571,7 @@
               points="16 6 12 2 8 6"
             /><line x1="12" x2="12" y1="2" y2="15" /></svg
           >
-          Export
+          {t("toolbar_export")}
         </button>
       {/if}
       {#if onPreviewToggle}
@@ -581,7 +581,7 @@
             ? 'text-primary hover:bg-primary/10'
             : 'text-foreground/50 hover:text-foreground hover:bg-accent'}"
           onclick={onPreviewToggle}
-          title="Preview"
+          title={t("common_preview")}
         >
           <svg
             class="h-3 w-3"
@@ -593,7 +593,7 @@
             stroke-linejoin="round"
             ><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></svg
           >
-          Preview
+          {t("common_preview")}
         </button>
       {/if}
       {#if !running && onRewind && persistedFiles && persistedFiles.length > 0}

@@ -2049,10 +2049,10 @@ pub(crate) fn codex_appserver_supported() -> bool {
     })
 }
 
-/// Spawn `codex app-server` (bidirectional JSON-RPC) for an interactive Codex session.
+/// Spawn `mofu app-server` (bidirectional JSON-RPC) for an interactive Mofu CLI session.
 /// Local only — remote/SSH app-server is out of scope for v1. The `--enable
 /// default_mode_request_user_input` flag is REQUIRED for the multiple-choice tool to fire
-/// in normal sessions (verified codex 0.136 — otherwise "unavailable in Default mode").
+/// in normal sessions.
 async fn spawn_codex_appserver_process(
     cwd: &str,
     settings: &adapter::AdapterSettings,
@@ -2071,19 +2071,13 @@ async fn spawn_codex_appserver_process(
     let codex_bin = claude_stream::which_binary("mofu")
         .ok_or_else(|| "Mofu CLI not found in PATH".to_string())?;
 
-    let mut args: Vec<String> = vec![
+    let args: Vec<String> = vec![
         "app-server".into(),
         "--enable".into(),
         "default_mode_request_user_input".into(),
         "-c".into(),
         "suppress_unstable_features_warning=true".into(),
     ];
-
-    // Third-party provider overrides (shared with the exec + side-question paths). The provider
-    // API key is injected as an env var (env_key=api_key) below, mirroring chat.rs's run_agent.
-    if let Some(p) = &settings.codex_provider {
-        args.extend(crate::agent::spawn::codex_provider_config_args(p));
-    }
 
     let mut cmd = Command::new(&codex_bin);
     for a in &args {
@@ -2109,12 +2103,24 @@ async fn spawn_codex_appserver_process(
             cmd.env(k, v);
         }
     }
-    // Provider API key (env_key=api_key) — the exec path sets this in chat.rs's run_agent, but
-    // the app-server actor path has no such hook, so inject it here.
+
+    // `mofu app-server` owns provider injection and model metadata synthesis. Pass Mofu env
+    // hints instead of duplicating Codex `-c model_providers.*` overrides from the app shell.
     if let Some(p) = &settings.codex_provider {
-        if let Some((k, v)) = crate::agent::spawn::codex_provider_env(p) {
-            cmd.env(k, v);
+        cmd.env("MOFU_CODEX_PROVIDER_ID", &p.id)
+            .env("MOFU_PROVIDER_BASE_URL", &p.base_url)
+            .env("MOFU_PROVIDER_ENV_KEY", &p.env_key);
+        if !p.model.is_empty() {
+            cmd.env("MOFU_MODEL", &p.model);
         }
+        if let Some(api_key) = p.api_key.as_ref().filter(|key| !key.is_empty()) {
+            cmd.env("MOFU_PROVIDER_API_KEY", api_key);
+            if !p.env_key.is_empty() {
+                cmd.env(&p.env_key, api_key);
+            }
+        }
+    } else if let Some(model) = settings.model.as_ref().filter(|model| !model.is_empty()) {
+        cmd.env("MOFU_MODEL", model);
     }
 
     let mut child = cmd

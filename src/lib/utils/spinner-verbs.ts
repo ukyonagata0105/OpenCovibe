@@ -19,7 +19,22 @@ const SPINNER_VERBS = [
   "Working",
 ];
 
+const SPINNER_VERBS_JA = [
+  "確認中",
+  "計算中",
+  "検討中",
+  "解釈中",
+  "生成中",
+  "推論中",
+  "処理中",
+  "校正中",
+  "整理中",
+  "思考中",
+  "作業中",
+];
+
 /** Pick a random spinner verb. */
-export function randomSpinnerVerb(): string {
-  return SPINNER_VERBS[Math.floor(Math.random() * SPINNER_VERBS.length)];
+export function randomSpinnerVerb(locale = "en"): string {
+  const verbs = locale === "ja" ? SPINNER_VERBS_JA : SPINNER_VERBS;
+  return verbs[Math.floor(Math.random() * verbs.length)];
 }
