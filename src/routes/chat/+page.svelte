@@ -5790,7 +5790,6 @@
           {localProxyStatuses}
           showAuthBadge={!welcomeVisible && store.useStreamSession}
           onShortcutHelp={() => (shortcutHelpOpen = !shortcutHelpOpen)}
-          availableSkills={store.availableSkills}
           {skillItems}
           codexSkillItems={codexRuntimeSkills}
           agents={preloadedAgents.map((a) => ({ name: a.name, description: a.description }))}

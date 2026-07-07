@@ -666,6 +666,7 @@ mod tests {
             max_budget_usd: None,
             fallback_model: None,
             keybinding_overrides: vec![],
+            claude_path: None,
             remote_hosts: vec![],
             platform_credentials: vec![],
             active_platform_id: None,

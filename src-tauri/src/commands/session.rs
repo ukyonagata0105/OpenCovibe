@@ -290,7 +290,12 @@ async fn preflight_check_base_url(
         std::time::Duration::from_secs(3)
     };
 
-    let check_url = format!("{}/v1/models", url.trim_end_matches('/'));
+    let trimmed_url = url.trim_end_matches('/');
+    let check_url = if trimmed_url.ends_with("/v1") {
+        format!("{}/models", trimmed_url)
+    } else {
+        format!("{}/v1/models", trimmed_url)
+    };
     log::debug!(
         "[session] preflight: checking {} (local={}, timeout={:?})",
         check_url,
@@ -616,8 +621,16 @@ pub(crate) async fn start_session_impl(
     // Preflight: check base_url reachability
     // Skip for SSH remote — reachability depends on remote host's network
     if remote.is_none() {
-        if let Err(e) = preflight_check_base_url(resolved.base_url.as_deref(), effective_pid).await
-        {
+        let provider_base_url = if meta.agent == "codex" {
+            adapter_settings
+                .codex_provider
+                .as_ref()
+                .map(|p| p.base_url.as_str())
+                .or(resolved.base_url.as_deref())
+        } else {
+            resolved.base_url.as_deref()
+        };
+        if let Err(e) = preflight_check_base_url(provider_base_url, effective_pid).await {
             // Only mark as Failed for new runs still in Pending — don't overwrite history
             if is_new && meta.status == RunStatus::Pending {
                 storage::runs::update_status(&run_id, RunStatus::Failed, None, Some(e.clone()))
@@ -767,13 +780,22 @@ pub(crate) async fn start_session_impl(
             })
             .await
             .map_err(|_| "Actor dead before initial message".to_string())?;
-        reply_rx
-            .await
-            .map_err(|_| "Actor dropped initial message reply".to_string())??;
-        log::debug!(
-            "[session] initial message sent through actor for run_id={}",
-            run_id
-        );
+        match tokio::time::timeout(std::time::Duration::from_secs(3), reply_rx).await {
+            Ok(Ok(Ok(()))) => {
+                log::debug!(
+                    "[session] initial message sent through actor for run_id={}",
+                    run_id
+                );
+            }
+            Ok(Ok(Err(e))) => return Err(e),
+            Ok(Err(_)) => return Err("Actor dropped initial message reply".to_string()),
+            Err(_) => {
+                log::warn!(
+                    "[session] initial message queued but not dispatched within timeout; continuing start for run_id={}",
+                    run_id
+                );
+            }
+        }
     } else {
         // Resume/continue without message: emit synthetic idle so frontend shows input box
         let idle_event = BusEvent::RunState {
@@ -1998,6 +2020,10 @@ async fn spawn_codex_appserver_process(
         .stderr(std::process::Stdio::piped())
         .hide_console()
         .kill_on_drop(true);
+    #[cfg(unix)]
+    {
+        cmd.process_group(0);
+    }
     if let Some(env) = extra_env {
         for (k, v) in env {
             cmd.env(k, v);

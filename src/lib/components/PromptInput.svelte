@@ -108,7 +108,6 @@
     apiKeySource = "",
     onAuthModeChange,
     localProxyStatuses = {} as Record<string, { running: boolean; needsAuth: boolean }>,
-    availableSkills = [],
     skillItems = [],
     codexSkillItems = [],
     agents = [],
@@ -159,7 +158,6 @@
     apiKeySource?: string;
     onAuthModeChange?: (mode: string) => void;
     localProxyStatuses?: Record<string, { running: boolean; needsAuth: boolean }>;
-    availableSkills?: string[];
     skillItems?: { name: string; description: string }[];
     // Live Codex runtime skills (name + path + description). `path` lets us send a picked skill
     // as a structured {type:"skill"} UserInput. Non-empty only for a live Codex session.
@@ -447,9 +445,23 @@
   // ── Chinese IME support ──
   let isComposing = $state(false);
 
-  let allCommands = $derived(mergeWithVirtual(cliCommands ?? [], agent));
+  let slashSkillCommands = $derived.by(() =>
+    (agent === "codex" ? codexSkillItems : skillItems).map((s) => ({
+      name: s.name,
+      description: s.description,
+      aliases: [],
+      _skill: true,
+    })),
+  );
+  let allCommands = $derived.by(() => {
+    const commands = [...(cliCommands ?? [])];
+    for (const skill of slashSkillCommands) {
+      if (!commands.some((c) => c.name === skill.name)) commands.push(skill);
+    }
+    return mergeWithVirtual(commands, agent);
+  });
   let quickActions = $derived(getQuickActions(allCommands, agent));
-  let skillNameSet = $derived(new Set(availableSkills));
+  let skillNameSet = $derived(new Set(slashSkillCommands.map((s) => s.name)));
 
   // Skill picker source: Codex draws from the live runtime list (carries the path needed to send
   // a structured skill ref); Claude keeps the file-scan/session list. Codex picker is shown only
@@ -673,6 +685,24 @@
   function selectSlashCommand(cmd: CliCommand, trigger: "enter" | "tab") {
     const interaction = getCommandInteraction(cmd);
     dbg("slash", `select:${interaction}:${trigger}`, { name: cmd.name });
+
+    if (cmd["_skill"] === true) {
+      if (agent === "codex" && trigger === "enter") {
+        attachCodexSkill(cmd.name);
+        const restoreText = savedInputForSlash;
+        closeSlashMenu("sub-select");
+        inputText = restoreText;
+        if (textareaEl) textareaEl.style.height = "auto";
+        requestAnimationFrame(() => textareaEl?.focus());
+        return;
+      }
+      if (trigger === "tab") {
+        closeSlashMenu("fill");
+        inputText = `/${cmd.name} `;
+        moveCursorToEnd();
+        return;
+      }
+    }
 
     // Both / and 、 triggers normalize to / when filling inputText below,
     // so the backend always sees the standard slash form.
@@ -1803,14 +1833,7 @@
     // {type:"skill", name, path} UserInput. So record the picked ref (with path from the runtime
     // list) as a chip and send it via onSend's skills arg, rather than filling the textarea.
     if (agent === "codex") {
-      const ref = codexSkillItems.find((s) => s.name === skillName);
-      if (!ref) {
-        dbgWarn("skills", "picked codex skill not in runtime list", { skillName });
-        return; // never attach a skill we lack a path for — it couldn't be sent
-      }
-      if (pendingSkills.some((s) => s.name === ref.name)) return; // already attached
-      pendingSkills = [...pendingSkills, { name: ref.name, path: ref.path }];
-      dbg("skills", "codex skill picked", { name: ref.name });
+      attachCodexSkill(skillName);
       requestAnimationFrame(() => textareaEl?.focus());
       return;
     }
@@ -1821,6 +1844,17 @@
       autoResize();
       textareaEl?.focus();
     });
+  }
+
+  function attachCodexSkill(skillName: string) {
+    const ref = codexSkillItems.find((s) => s.name === skillName);
+    if (!ref) {
+      dbgWarn("skills", "picked codex skill not in runtime list", { skillName });
+      return; // never attach a skill we lack a path for — it couldn't be sent
+    }
+    if (pendingSkills.some((s) => s.name === ref.name)) return; // already attached
+    pendingSkills = [...pendingSkills, { name: ref.name, path: ref.path }];
+    dbg("skills", "codex skill picked", { name: ref.name });
   }
 
   function removeSkill(name: string) {

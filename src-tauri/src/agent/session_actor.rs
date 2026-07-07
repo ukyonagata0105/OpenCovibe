@@ -58,6 +58,25 @@ fn strip_ansi(s: &str) -> String {
     out
 }
 
+#[cfg(unix)]
+async fn kill_child_process_group(child: &mut Child) {
+    if let Some(pid) = child.id() {
+        // App-server transport starts `mofu` in its own process group so killing -pid also
+        // terminates the nested codex app-server child that otherwise survives parent kill.
+        unsafe {
+            libc::kill(-(pid as i32), libc::SIGKILL);
+        }
+    }
+    let _ = child.kill().await;
+    let _ = child.wait().await;
+}
+
+#[cfg(not(unix))]
+async fn kill_child_process_group(child: &mut Child) {
+    let _ = child.kill().await;
+    let _ = child.wait().await;
+}
+
 /// Extract content from `<promise>...</promise>` tag in text.
 fn extract_promise_tag(text: &str) -> Option<&str> {
     let start = text.find("<promise>")?;
@@ -1673,8 +1692,12 @@ impl SessionActor {
 
         // Kill process
         if let Some(ref mut child) = self.child {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
+            if self.codex.is_some() {
+                kill_child_process_group(child).await;
+            } else {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+            }
         }
 
         Ok(())
