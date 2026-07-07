@@ -17,6 +17,7 @@
   let searchInput = $state("");
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let deletingRunId = $state<string | null>(null);
+  let pendingDeleteRunId = $state<string | null>(null);
 
   // Active status filter (quick pills)
   let activeStatusFilter = $state<string>("all");
@@ -222,10 +223,27 @@
     }
   }
 
-  async function deleteRun(event: MouseEvent, runId: string) {
+  function stopRowAction(event: MouseEvent) {
+    event.preventDefault();
     event.stopPropagation();
-    if (!confirm("この履歴を削除しますか？")) return;
+  }
+
+  function requestDeleteRun(event: MouseEvent, runId: string) {
+    stopRowAction(event);
+    error = "";
+    pendingDeleteRunId = runId;
+  }
+
+  function cancelDeleteRun(event: MouseEvent) {
+    stopRowAction(event);
+    pendingDeleteRunId = null;
+  }
+
+  async function deleteRun(event: MouseEvent, runId: string) {
+    stopRowAction(event);
+    if (pendingDeleteRunId !== runId) return;
     deletingRunId = runId;
+    pendingDeleteRunId = null;
     error = "";
     try {
       await softDeleteRuns([runId]);
@@ -599,13 +617,32 @@
                     {t("history_files", { count: String(run.filesTouchedCount) })}
                   </div>
                 {/if}
-                <button
-                  class="mt-2 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
-                  disabled={deletingRunId === run.runId}
-                  onclick={(e) => deleteRun(e, run.runId)}
-                >
-                  {deletingRunId === run.runId ? "削除中..." : "削除"}
-                </button>
+                {#if pendingDeleteRunId === run.runId}
+                  <div class="mt-2 flex justify-end gap-1">
+                    <button
+                      class="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted/60"
+                      disabled={deletingRunId === run.runId}
+                      onclick={cancelDeleteRun}
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      class="rounded-md border border-red-500/40 px-2 py-1 text-xs text-red-500 hover:bg-red-500/10"
+                      disabled={deletingRunId === run.runId}
+                      onclick={(e) => deleteRun(e, run.runId)}
+                    >
+                      {deletingRunId === run.runId ? "削除中..." : "削除する"}
+                    </button>
+                  </div>
+                {:else}
+                  <button
+                    class="mt-2 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+                    disabled={deletingRunId === run.runId}
+                    onclick={(e) => requestDeleteRun(e, run.runId)}
+                  >
+                    {deletingRunId === run.runId ? "削除中..." : "削除"}
+                  </button>
+                {/if}
               </div>
             </div>
           </div>
