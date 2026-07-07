@@ -526,10 +526,7 @@ pub fn soft_delete_runs(ids: &[String]) -> Result<u32, String> {
         if meta.deleted_at.is_some() {
             continue; // already deleted, skip
         }
-        if matches!(
-            meta.status,
-            RunStatus::Running | RunStatus::Pending | RunStatus::Idle
-        ) {
+        if matches!(meta.status, RunStatus::Running | RunStatus::Pending) {
             return Err(format!("Cannot delete: run {} is still active", id));
         }
         metas.push(meta);
